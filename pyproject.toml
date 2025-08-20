@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dual-usb-backup"
+version = "0.1.0"
+description = "Dual-USB Hardware Backup Module for secure offline password management."
+authors = [
+    { name = "Your Name" }
+]
+requires-python = ">=3.6"
+dependencies = []
