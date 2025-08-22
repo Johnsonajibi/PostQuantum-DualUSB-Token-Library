@@ -11,6 +11,10 @@ No cloud stuff, just good old hardware security.
 import os
 import shutil
 import platform
+import logging
+
+# Setup basic logging
+logging.basicConfig(filename='dual_usb_backup.log', level=logging.INFO, format='%(asctime)s %(levelname)s:%(message)s')
 
 def list_removable_drives():
     """
@@ -34,7 +38,7 @@ def list_removable_drives():
                         continue
             bitmask >>= 1
     else:
-            # Linux/Mac: look for /media, /mnt, /Volumes
+        # Linux/Mac: look for /media, /mnt, /Volumes
         for mount in ["/media", "/mnt", "/Volumes"]:
             if os.path.exists(mount):
                 for d in os.listdir(mount):
@@ -45,14 +49,27 @@ def list_removable_drives():
 
 def select_dual_usb(drives):
     """
-    Pick two USB drives: one for your token, one for your backups.
+    Prompt user to select two USB drives: one for your token, one for your backups.
     Returns (auth_token_drive, vault_backup_drive).
     If you don't have at least two, it lets you know.
     """
     if len(drives) < 2:
         raise RuntimeError("At least two USB drives required for dual-USB backup.")
-    # For demo, just pick first two
-    return drives[0], drives[1]
+    print("Available USB drives:")
+    for idx, drive in enumerate(drives):
+        print(f"{idx + 1}: {drive}")
+    try:
+        auth_idx = int(input("Select USB drive for authentication token (number): ")) - 1
+        vault_idx = int(input("Select USB drive for vault backup (number): ")) - 1
+        if auth_idx == vault_idx:
+            raise ValueError("You must select two different drives.")
+        auth_token_drive = drives[auth_idx]
+        vault_backup_drive = drives[vault_idx]
+        logging.info(f"User selected {auth_token_drive} for token and {vault_backup_drive} for backup.")
+        return auth_token_drive, vault_backup_drive
+    except Exception as e:
+        logging.error(f"Drive selection error: {e}")
+        raise RuntimeError("Invalid drive selection.") from e
 
 def backup_token(auth_token_path, auth_token_drive):
     """
@@ -60,8 +77,13 @@ def backup_token(auth_token_path, auth_token_drive):
     Returns the path where it was saved.
     """
     dest = os.path.join(auth_token_drive, os.path.basename(auth_token_path))
-    shutil.copy2(auth_token_path, dest)
-    return dest
+    try:
+        shutil.copy2(auth_token_path, dest)
+        logging.info(f"Token backed up to {dest}")
+        return dest
+    except Exception as e:
+        logging.error(f"Failed to backup token: {e}")
+        raise
 
 def backup_vault_files(vault_file_paths, vault_backup_drive):
     """
@@ -69,13 +91,23 @@ def backup_vault_files(vault_file_paths, vault_backup_drive):
     Returns a list of where each file was saved.
     """
     secure_backup_folder = os.path.join(vault_backup_drive, ".system_backup")
-    os.makedirs(secure_backup_folder, exist_ok=True)
+    try:
+        os.makedirs(secure_backup_folder, exist_ok=True)
+    except Exception as e:
+        logging.error(f"Failed to create backup folder: {e}")
+        raise
     backed_up = []
     for vault_file_path in vault_file_paths:
         if os.path.exists(vault_file_path):
             dest = os.path.join(secure_backup_folder, os.path.basename(vault_file_path))
-            shutil.copy2(vault_file_path, dest)
-            backed_up.append(dest)
+            try:
+                shutil.copy2(vault_file_path, dest)
+                logging.info(f"Vault file backed up to {dest}")
+                backed_up.append(dest)
+            except Exception as e:
+                logging.error(f"Failed to backup vault file {vault_file_path}: {e}")
+        else:
+            logging.warning(f"Vault file not found: {vault_file_path}")
     return backed_up
 
 def dual_usb_backup_workflow(auth_token_path, vault_file_paths):
