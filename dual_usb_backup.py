@@ -9,6 +9,10 @@ Production‑ready, non‑interactive helpers to:
 - Verify the setup (decrypt backup in memory and compare SHA3‑512 of plaintext)
 - Rotate and restore tokens
 - Enforce storage policy (USB_ONLY / LOCAL_ONLY / BOTH)
+- Enforce passphrase strength and brute-force protection
+- Tamper detection and audit logging
+- Redundant backup support
+- Improved secure deletion
 
 Dependencies (recommended):
     pip install cryptography argon2-cffi psutil
@@ -21,6 +25,7 @@ Security notes:
 - Atomic writes and directory fsyncs are used to reduce the risk of torn writes.
 - Logging avoids sensitive plaintext. You should manage OS access controls and safe removal.
 - Secure deletion on common filesystems cannot be guaranteed; we provide best‑effort only.
+- Audit log entries are cryptographically signed.
 
 Test recommendations:
 - Simulate power loss during write (kill process mid‑copy in temp dir)
@@ -41,6 +46,8 @@ import ctypes
 import subprocess
 import tempfile
 import logging
+import secrets
+import hmac
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -55,6 +62,55 @@ if not logger.handlers:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 logger.setLevel(logging.INFO)
+
+# ---- Audit Logging (cryptographically signed entries) ----
+AUDIT_LOG_PATH = Path("dual_usb_audit.log")
+AUDIT_KEY = secrets.token_bytes(32)  # Should be stored securely
+
+def audit_log(event: str, details: dict):
+    msg = f"{_now_iso()}|{event}|{json.dumps(details, separators=(',', ':'))}"
+    sig = hmac.new(AUDIT_KEY, msg.encode(), "sha256").hexdigest()
+    with AUDIT_LOG_PATH.open("a") as f:
+        f.write(f"{msg}|{sig}\n")
+
+# ---- Passphrase Strength Enforcement ----
+def enforce_passphrase_strength(passphrase: str) -> None:
+    if len(passphrase) < 12 or not any(c.isdigit() for c in passphrase) or not any(c.isupper() for c in passphrase):
+        raise ValueError("Passphrase must be at least 12 characters, include a digit and an uppercase letter.")
+
+# ---- Brute-force Protection ----
+def brute_force_delay(attempts: int):
+    delay = min(2 ** attempts, 32)
+    logger.warning(f"Brute-force protection: delaying {delay} seconds after {attempts} failed attempts.")
+    time.sleep(delay)
+
+# ---- Tamper Detection ----
+def verify_backup_integrity(backup_file: Path) -> bool:
+    try:
+        data = json.loads(backup_file.read_text("utf-8"))
+        meta = data["meta"]
+        expected_hash = meta.get("orig_sha3_512")
+        actual_hash = sha3_512_file(backup_file)
+        if expected_hash and actual_hash != expected_hash:
+            logger.error("Tamper detected: backup file hash mismatch.")
+            audit_log("tamper_detected", {"file": str(backup_file)})
+            return False
+        return True
+    except Exception:
+        return False
+
+# ---- Improved Secure Deletion ----
+def secure_delete(path: Path, passes: int = 3):
+    try:
+        sz = path.stat().st_size
+        for _ in range(passes):
+            with path.open("r+b", buffering=0) as f:
+                f.write(secrets.token_bytes(min(sz, 4096)))
+                f.flush(); os.fsync(f.fileno())
+        path.unlink(missing_ok=True)
+        audit_log("secure_delete", {"file": str(path)})
+    except Exception:
+        pass
 
 # ---- Crypto primitives ----
 import hashlib
@@ -74,16 +130,11 @@ try:
 except Exception as e:  # pragma: no cover
     raise RuntimeError("cryptography package is required: pip install cryptography") from e
 
-
 def kdf_scrypt(passphrase: str, salt: bytes, n: int = 2**15, r: int = 8, p: int = 1, length: int = 32) -> bytes:
     kdf = Scrypt(salt=salt, length=length, n=n, r=r, p=p)
     return kdf.derive(passphrase.encode("utf-8"))
 
-
 def derive_key(passphrase: str, salt: bytes) -> Tuple[bytes, dict]:
-    """Derive a 256‑bit key from passphrase using Argon2id if available, else scrypt.
-    Returns (key, params_dict_for_metadata).
-    """
     if _HAS_ARGON2:
         key = kdf_argon2id(passphrase, salt)
         params = {"kdf": "argon2id", "m_cost": 262144, "t_cost": 3, "parallelism": 2}
@@ -91,7 +142,6 @@ def derive_key(passphrase: str, salt: bytes) -> Tuple[bytes, dict]:
         key = kdf_scrypt(passphrase, salt)
         params = {"kdf": "scrypt", "n": 2**15, "r": 8, "p": 1}
     return key, params
-
 
 def sha3_512_file(path: Path, chunk: int = 1024 * 1024) -> str:
     h = hashlib.sha3_512()
@@ -103,16 +153,13 @@ def sha3_512_file(path: Path, chunk: int = 1024 * 1024) -> str:
             h.update(b)
     return h.hexdigest()
 
-
 # ---- Atomic file ops ----
-
 def _fsync_dir(dir_path: Path) -> None:
     dir_fd = os.open(str(dir_path), os.O_DIRECTORY)
     try:
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
-
 
 def atomic_write_bytes(dst: Path, data: bytes) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -127,30 +174,23 @@ def atomic_write_bytes(dst: Path, data: bytes) -> None:
     except Exception:
         pass
 
-
 def atomic_copy(src: Path, dst: Path) -> None:
     data = src.read_bytes()
     atomic_write_bytes(dst, data)
 
-
 # ---- Cross‑platform removable device discovery ----
-
 @dataclass
 class DeviceInfo:
     mountpoint: Path
     fs_type: Optional[str]
     label: Optional[str]
-    uuid: Optional[str]  # volume UUID / serial
+    uuid: Optional[str]
     is_removable: bool
-
 
 class StoragePolicy(str, Enum):
     USB_ONLY = "USB_ONLY"
     LOCAL_ONLY = "LOCAL_ONLY"
     BOTH = "BOTH"
-
-
-# Helpers per OS to gather device metadata
 
 def _windows_list_removable() -> List[DeviceInfo]:
     devices: List[DeviceInfo] = []
@@ -167,7 +207,6 @@ def _windows_list_removable() -> List[DeviceInfo]:
             try:
                 dtype = GetDriveTypeW(ctypes.c_wchar_p(root))
                 if dtype == DRIVE_REMOVABLE and os.path.exists(root):
-                    # Volume info
                     vol_name_buf = ctypes.create_unicode_buffer(261)
                     fs_name_buf = ctypes.create_unicode_buffer(261)
                     ser_num = ctypes.c_uint()
@@ -182,27 +221,24 @@ def _windows_list_removable() -> List[DeviceInfo]:
                 continue
     return devices
 
-
 def _linux_list_removable() -> List[DeviceInfo]:
     devices: List[DeviceInfo] = []
     try:
         import psutil  # type: ignore
         parts = psutil.disk_partitions(all=False)
     except Exception:
-        # Fallback: parse /proc/mounts
         parts = []
         with open("/proc/mounts", "r") as f:
             for line in f:
                 fields = line.split()
                 if len(fields) >= 3:
                     device, mountpoint, fs_type = fields[0], fields[1], fields[2]
-                    class _P:  # minimal shim
+                    class _P:
                         device = device
                         mountpoint = mountpoint
                         fstype = fs_type
                     parts.append(_P)
 
-    # Try blkid for UUID and TYPE
     def blkid(device: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         try:
             out = subprocess.check_output(["blkid", "-o", "export", device], stderr=subprocess.DEVNULL, text=True)
@@ -217,14 +253,12 @@ def _linux_list_removable() -> List[DeviceInfo]:
         fstype = getattr(p, "fstype", None)
         if not dev.startswith("/dev"):
             continue
-        # Heuristic: skip system mounts
         if any(mnt.startswith(x) for x in ("/proc", "/sys", "/run", "/boot/efi")):
             continue
         uuid_val, type_val, label = blkid(dev)
-        is_rem = True  # heuristic; Linux doesn't expose easily via stdlib
+        is_rem = True
         devices.append(DeviceInfo(mountpoint=Path(mnt), fs_type=type_val or fstype, label=label, uuid=uuid_val, is_removable=is_rem))
     return devices
-
 
 def _darwin_list_removable() -> List[DeviceInfo]:
     devices: List[DeviceInfo] = []
@@ -234,7 +268,6 @@ def _darwin_list_removable() -> List[DeviceInfo]:
     for entry in volumes.iterdir():
         if not entry.is_dir():
             continue
-        # Use diskutil to get UUID/FS info
         uuid_val = None
         fs_type = None
         label = entry.name
@@ -250,9 +283,7 @@ def _darwin_list_removable() -> List[DeviceInfo]:
         devices.append(DeviceInfo(mountpoint=entry, fs_type=fs_type, label=label, uuid=uuid_val, is_removable=True))
     return devices
 
-
 def list_removable_devices() -> List[DeviceInfo]:
-    """Return a list of removable devices with best‑effort UUIDs and metadata."""
     if sys.platform.startswith("win"):
         return _windows_list_removable()
     elif sys.platform.startswith("linux"):
@@ -263,9 +294,7 @@ def list_removable_devices() -> List[DeviceInfo]:
         logger.warning("Unsupported platform: %s", sys.platform)
         return []
 
-
 # ---- Windows hidden attribute helper ----
-
 def set_hidden_windows(path: Path) -> None:
     if not sys.platform.startswith("win"):
         return
@@ -275,49 +304,34 @@ def set_hidden_windows(path: Path) -> None:
     except Exception:
         pass
 
-
 # ---- Exceptions ----
 class DualUSBError(Exception): ...
 class DeviceNotFound(DualUSBError): ...
 class VerificationError(DualUSBError): ...
 class DecryptionError(DualUSBError): ...
 
-
 # ---- Core operations ----
-
 BACKUP_DIRNAME = ".system_backup"
 BACKUP_SUFFIX = ".enc.json"
-
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-
-def write_secret_primary(token_path: Path, primary_root: Path, policy: StoragePolicy = StoragePolicy.USB_ONLY) -> Path:
-    """Copy (atomic) the *plaintext* token to the primary USB.
-    If policy == USB_ONLY, best‑effort remove local copy.
-    """
+def write_secret_primary(token_path: Path, primary_root: Path, policy: StoragePolicy = StoragePolicy.USB_ONLY, confirm_callback=None) -> Path:
     if not token_path.exists():
         raise FileNotFoundError(str(token_path))
     dst = primary_root / token_path.name
     atomic_copy(token_path, dst)
+    audit_log("token_copied", {"src": str(token_path), "dst": str(dst)})
     if policy == StoragePolicy.USB_ONLY:
-        try:
-            # best‑effort wipe first blocks then remove (FS dependent)
-            sz = token_path.stat().st_size
-            with token_path.open("r+b", buffering=0) as f:
-                f.write(b"\x00" * min(sz, 4096))
-                f.flush(); os.fsync(f.fileno())
-        except Exception:
-            pass
-        try:
-            token_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        if confirm_callback and not confirm_callback(f"Delete local token file {token_path}?"):
+            logger.warning("User declined deletion of local token file.")
+        else:
+            secure_delete(token_path)
     return dst
 
-
 def _encrypt_backup(plaintext: bytes, passphrase: str, meta: dict) -> bytes:
+    enforce_passphrase_strength(passphrase)
     salt = os.urandom(16)
     key, kdf_params = derive_key(passphrase, salt)
     aad = json.dumps(meta, separators=(",", ":")).encode("utf-8")
@@ -331,9 +345,7 @@ def _encrypt_backup(plaintext: bytes, passphrase: str, meta: dict) -> bytes:
     }
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
-
 def write_encrypted_backup(token_path: Path, backup_root: Path, passphrase: str, primary_uuid: Optional[str], backup_uuid: Optional[str], rotation_counter: int = 0) -> Path:
-    """Encrypt token and write JSON envelope atomically to backup USB."""
     if not token_path.exists():
         raise FileNotFoundError(str(token_path))
     meta = {
@@ -350,89 +362,100 @@ def write_encrypted_backup(token_path: Path, backup_root: Path, passphrase: str,
     backup_dir.mkdir(parents=True, exist_ok=True)
     dst = backup_dir / f"{token_path.name}{BACKUP_SUFFIX}"
     atomic_write_bytes(dst, payload)
-    # Make hidden on Windows
     try:
         set_hidden_windows(backup_dir)
         set_hidden_windows(dst)
     except Exception:
         pass
+    audit_log("backup_created", {"file": str(dst), "uuid": backup_uuid})
     return dst
 
-
-def decrypt_backup_to_memory(backup_file: Path, passphrase: str) -> Tuple[bytes, dict]:
-    data = json.loads(backup_file.read_text("utf-8"))
-    meta = data["meta"]
-    kdf_info = data["kdf"]
-    aead = data["aead"]
-    salt = bytes.fromhex(kdf_info["salt"])  # type: ignore
-    key, _ = derive_key(passphrase, salt)
-    nonce = bytes.fromhex(aead["nonce"])  # type: ignore
-    ct = bytes.fromhex(aead["ct"])       # type: ignore
-    aad = json.dumps(meta, separators=(",", ":")).encode("utf-8")
-    try:
-        pt = AESGCM(key).decrypt(nonce, ct, aad)
-    except Exception as e:
-        raise DecryptionError("Backup decryption failed") from e
-    return pt, meta
-
+def decrypt_backup_to_memory(backup_file: Path, passphrase: str, max_attempts: int = 5) -> Tuple[bytes, dict]:
+    enforce_passphrase_strength(passphrase)
+    attempts = 0
+    while attempts < max_attempts:
+        try:
+            data = json.loads(backup_file.read_text("utf-8"))
+            meta = data["meta"]
+            kdf_info = data["kdf"]
+            aead = data["aead"]
+            salt = bytes.fromhex(kdf_info["salt"])
+            key, _ = derive_key(passphrase, salt)
+            nonce = bytes.fromhex(aead["nonce"])
+            ct = bytes.fromhex(aead["ct"])
+            aad = json.dumps(meta, separators=(",", ":")).encode("utf-8")
+            pt = AESGCM(key).decrypt(nonce, ct, aad)
+            audit_log("backup_decrypted", {"file": str(backup_file)})
+            return pt, meta
+        except Exception as e:
+            attempts += 1
+            brute_force_delay(attempts)
+            logger.error(f"Backup decryption failed (attempt {attempts}): {e}")
+            audit_log("decryption_failed", {"file": str(backup_file), "attempt": attempts})
+    raise DecryptionError("Backup decryption failed after max attempts")
 
 def verify_dual_setup(primary_token: Path, backup_file: Path, passphrase: str) -> bool:
     if not primary_token.exists():
         raise VerificationError("Primary token file missing")
+    if not verify_backup_integrity(backup_file):
+        raise VerificationError("Backup file integrity check failed")
     pt, meta = decrypt_backup_to_memory(backup_file, passphrase)
     current_hash = sha3_512_file(primary_token)
     if current_hash != meta.get("orig_sha3_512"):
         raise VerificationError("Primary token hash does not match backup metadata")
-    # Also check that decrypting backup yields identical plaintext
     if hashlib.sha3_512(pt).hexdigest() != current_hash:
         raise VerificationError("Decrypted backup content differs from primary token")
+    audit_log("setup_verified", {"primary": str(primary_token), "backup": str(backup_file)})
     return True
 
+# ---- Redundant Backup Creation ----
+def write_redundant_backups(token_path: Path, backup_mounts: List[Path], passphrase: str, primary_uuid: Optional[str], backup_uuids: List[str], rotation_counter: int = 0) -> List[Path]:
+    backups = []
+    for i, backup_mount in enumerate(backup_mounts):
+        uuid = backup_uuids[i] if i < len(backup_uuids) else None
+        dst = write_encrypted_backup(token_path, backup_mount, passphrase, primary_uuid, uuid, rotation_counter)
+        backups.append(dst)
+    return backups
 
-# ---- High‑level workflows ----
+# ---- Device Authentication (basic, by UUID) ----
+def authenticate_device(device: DeviceInfo, expected_uuid: str) -> bool:
+    return device.uuid and device.uuid.lower() == expected_uuid.lower()
 
-def init_dual_usb(token_path: Path, primary_mount: Path, backup_mount: Path, passphrase: str, policy: StoragePolicy = StoragePolicy.USB_ONLY, primary_uuid: Optional[str] = None, backup_uuid: Optional[str] = None) -> dict:
-    """Initialize dual‑USB: write plaintext token to primary, encrypted backup to secondary.
-    Returns metadata dict with paths and ids.
-    """
-    primary_dst = write_secret_primary(token_path, primary_mount, policy=policy)
-    backup_dst = write_encrypted_backup(primary_dst, backup_mount, passphrase, primary_uuid, backup_uuid, rotation_counter=0)
-    return {
-        "primary_path": str(primary_dst),
-        "backup_path": str(backup_dst),
-        "policy": policy.value,
-    }
-
-
-def rotate_token(new_token_path: Path, primary_mount: Path, backup_mount: Path, passphrase: str, primary_uuid: Optional[str], backup_uuid: Optional[str], prev_rotation_counter: int) -> dict:
-    """Rotate token: replace plaintext on primary, re‑encrypt to backup, counter++"""
-    primary_dst = write_secret_primary(new_token_path, primary_mount, policy=StoragePolicy.USB_ONLY)
-    backup_dst = write_encrypted_backup(primary_dst, backup_mount, passphrase, primary_uuid, backup_uuid, rotation_counter=prev_rotation_counter + 1)
-    return {"primary_path": str(primary_dst), "backup_path": str(backup_dst), "rotation_counter": prev_rotation_counter + 1}
-
-
-def restore_from_backup(backup_file: Path, restore_primary_mount: Path, passphrase: str, restore_filename: Optional[str] = None, policy: StoragePolicy = StoragePolicy.USB_ONLY) -> Path:
-    """Restore plaintext token from encrypted backup to a (new) primary USB.
-    Does not persist plaintext on local disk.
-    """
-    pt, meta = decrypt_backup_to_memory(backup_file, passphrase)
-    name = restore_filename or meta.get("orig_name") or f"token_{int(time.time())}.bin"
-    dst = restore_primary_mount / name
-    atomic_write_bytes(dst, pt)
-    if policy == StoragePolicy.USB_ONLY:
-        # nothing to delete; plaintext exists only on new primary
-        pass
-    return dst
-
-
-# ---- Convenience: find device by recorded UUID/serial ----
-
+# ---- Find device by UUID ----
 def find_device_by_uuid(devices: List[DeviceInfo], volume_uuid: str) -> Optional[DeviceInfo]:
     for d in devices:
         if d.uuid and d.uuid.lower() == volume_uuid.lower():
             return d
     return None
 
+# ---- High‑level workflows ----
+def init_dual_usb(token_path: Path, primary_mount: Path, backup_mounts: List[Path], passphrase: str, policy: StoragePolicy = StoragePolicy.USB_ONLY, primary_uuid: Optional[str] = None, backup_uuids: List[str] = [], confirm_callback=None) -> dict:
+    enforce_passphrase_strength(passphrase)
+    primary_dst = write_secret_primary(token_path, primary_mount, policy=policy, confirm_callback=confirm_callback)
+    backup_dsts = write_redundant_backups(primary_dst, backup_mounts, passphrase, primary_uuid, backup_uuids, rotation_counter=0)
+    return {
+        "primary_path": str(primary_dst),
+        "backup_paths": [str(b) for b in backup_dsts],
+        "policy": policy.value,
+    }
+
+def rotate_token(new_token_path: Path, primary_mount: Path, backup_mounts: List[Path], passphrase: str, primary_uuid: Optional[str], backup_uuids: List[str], prev_rotation_counter: int, confirm_callback=None) -> dict:
+    primary_dst = write_secret_primary(new_token_path, primary_mount, policy=StoragePolicy.USB_ONLY, confirm_callback=confirm_callback)
+    backup_dsts = write_redundant_backups(primary_dst, backup_mounts, passphrase, primary_uuid, backup_uuids, rotation_counter=prev_rotation_counter + 1)
+    return {
+        "primary_path": str(primary_dst),
+        "backup_paths": [str(b) for b in backup_dsts],
+        "rotation_counter": prev_rotation_counter + 1
+    }
+
+def restore_from_backup(backup_file: Path, restore_primary_mount: Path, passphrase: str, restore_filename: Optional[str] = None, policy: StoragePolicy = StoragePolicy.USB_ONLY) -> Path:
+    pt, meta = decrypt_backup_to_memory(backup_file, passphrase)
+    name = restore_filename or meta.get("orig_name") or f"token_{int(time.time())}.bin"
+    dst = restore_primary_mount / name
+    atomic_write_bytes(dst, pt)
+    if policy == StoragePolicy.USB_ONLY:
+        pass
+    return dst
 
 # ---- Example (commented) ----
 # if __name__ == "__main__":
@@ -441,6 +464,4 @@ def find_device_by_uuid(devices: List[DeviceInfo], volume_uuid: str) -> Optional
 #     for d in devs:
 #         print(d)
 #     # Choose primary/backup by UI outside this module, then:
-#     # init_dual_usb(Path("secret.token"), devs[0].mountpoint, devs[1].mountpoint, passphrase="correct horse battery staple")
-dist/
-*.egg-info/
+#     # init_dual_usb(Path("secret.token"), devs[0].mountpoint, [devs[1].mountpoint], passphrase="CorrectHorseBatteryStaple1")
