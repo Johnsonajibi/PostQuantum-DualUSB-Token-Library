@@ -3,10 +3,11 @@ from setuptools import setup, find_packages
 setup(
     name="pqcdualusb",
     version="0.1.0",
-    description="Dual-USB Hardware Backup Module for secure offline password management.",
-    author="Your Name",
+    description="Enterprise-grade dual USB backup library with post-quantum cryptography protection for maximum security",
+    author="Johnson Ajibi",
+    author_email="johnsonajibi@example.com",
     packages=find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.8',
     install_requires=[],
     classifiers=[
         "Programming Language :: Python :: 3",
