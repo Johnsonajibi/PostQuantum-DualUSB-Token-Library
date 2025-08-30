@@ -5,27 +5,45 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pqcdualusb"
 version = "0.1.0"
-description = "Post-quantum dual USB backup library with enterprise security"
+description = "Enterprise-grade dual USB backup library with post-quantum cryptography protection for maximum security"
 authors = [
     { name = "Johnson Ajibi", email = "johnsonajibi@example.com" }
 ]
-readme = "README.md"
+readme = "PYPI_README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-keywords = ["security", "backup", "usb", "cryptography", "post-quantum"]
+keywords = [
+    "security", "backup", "usb", "cryptography", "post-quantum", 
+    "dual-usb", "enterprise", "quantum-resistant", "encryption", 
+    "memory-protection", "audit-logging", "cross-platform",
+    "dilithium", "aes-256", "argon2", "hsm", "air-gapped"
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology", 
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux", 
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Security :: Cryptography",
     "Topic :: System :: Archiving :: Backup",
+    "Topic :: System :: Hardware :: Universal Serial Bus (USB)",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+    "Environment :: Console",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -46,7 +64,13 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library"
 Repository = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library"
+Documentation = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library#readme"
 Issues = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/issues"
+Discussions = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/discussions"
+Releases = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/releases"
+Security = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/security/policy"
+Changelog = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/blob/master/CHANGELOG.md"
+Contributing = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/blob/master/CONTRIBUTING.md"
 
 [project.scripts]
 pqcdualusb = "dual_usb_backup:main"
