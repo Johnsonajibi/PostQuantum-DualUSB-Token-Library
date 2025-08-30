@@ -1,7 +1,18 @@
 # PostQuantum-DualUSB-Token-Library
 
-A Python library**Core Security**
-**Operational**
+A Python library**Core Security***Core Security****Oper-- - R- Atomic writes with crash-safe temp file operationsal-time progress reporting with ETA calculations and bandwidth monitoringnhanced USB detection with improved cross-platform drive detection
+- Interactive CLI with smart drive selection and detailed information
+- Atomic writes with crash-safe temp file operations
+- Cross-platform support for Linux, macOS, and WindowsAtomic writes with crash-safe temp file operationsal-time progress reporting with ETA calculations and bandwidth monitoringtional**
+- Real-time progress reporting with ETA calculations and bandwidth monitoring
+- Enhanced USB detection with improved cross-platform drive detection
+- Interactive CLI with smart drive selection and detailed information
+- Atomic writes with crash-safe temp file operations
+- Cross-platform support for Linux, macOS, and Windowsl USB storage - enforce token split across two devices
+- AEAD encrypted backups using Argon2id key derivation and AES-256-GCM
+- Secure memory management with memory locking and automatic clearing
+- Timing attack protection with constant-time comparisons and random delays
+- Enhanced input validation against path traversal and malicious inputsperational**
 - Real-time progress reporting with ETA calculations
 - Enhanced cross-platform USB detection
 - Interactive CLI with smart drive selection
@@ -70,11 +81,11 @@ All features are production-ready with comprehensive testing.
 ## Features
 
 ### Core Security
-- 🔒 **Dual USB storage** – enforce token split across two devices.  
-- 🛡 **AEAD encrypted backups** – Argon2id → AES-256-GCM with authenticated metadata.  
+- Dual USB storage - enforce token split across two devices  
+- AEAD encrypted backups using Argon2id key derivation and AES-256-GCM  
 - � **Secure memory management** – memory locking and automatic sensitive data clearing.
-- ⏱️ **Timing attack protection** – constant-time comparisons and random delays.
-- 🛡️ **Enhanced input validation** – protection against path traversal and malicious inputs.
+- Timing attack protection with constant-time comparisons and random delays
+- Enhanced input validation against path traversal and malicious inputs
 
 **Audit & Integrity**
 - Tamper-evident audit logs with HMAC-SHA256 chaining
@@ -85,16 +96,16 @@ All features are production-ready with comprehensive testing.
 
 ### Operational Features
 - � **Real-time progress reporting** – ETA calculations and bandwidth monitoring.
-- 🖥️ **Enhanced USB detection** – improved cross-platform drive detection and validation.
-- 🎯 **Interactive CLI** – smart drive selection and detailed drive information.
+- Enhanced USB detection with improved cross-platform drive detection
+- Interactive CLI with smart drive selection and detailed information
 - �💾 **Atomic writes** – crash-safe temp file + fsync + replace.  
-- ⚡ **Cross-platform** – Linux, macOS, Windows with platform-specific optimizations.
+- Cross-platform support for Linux, macOS, and Windows
 
-### Developer Experience
-- 🧪 **Comprehensive testing** – unit tests and enhancement verification built-in.
-- 📚 **Extensive documentation** – detailed inline docs and usage examples.
-- ⚙️ **Configurable security** – environment variables for security parameters.
-- 🔧 **Error recovery** – robust retry mechanisms and graceful fallbacks.  
+**Developer Experience**  
+- Comprehensive testing with unit tests and enhancement verification built-in
+- Extensive documentation with detailed inline docs and usage examples
+- Configurable security using environment variables for security parameters
+- Error recovery with robust retry mechanisms and graceful fallbacks  
 
 ---
 
@@ -374,7 +385,7 @@ Please open an issue before working on major changes.
 
 ---
 
-## 📜 License
+## License
 
 MIT License – see [LICENSE](LICENSE)
 
