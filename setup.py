@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="dual-usb-backup",
+    name="pqcdualusb",
     version="0.1.0",
     description="Dual-USB Hardware Backup Module for secure offline password management.",
     author="Your Name",
