@@ -7,7 +7,7 @@ name = "pqcdualusb"
 version = "0.1.0"
 description = "Post-quantum dual USB backup library with enterprise security"
 authors = [
-    { name = "Johnson Ajibi", email = "your.email@example.com" }
+    { name = "Johnson Ajibi", email = "johnsonajibi@example.com" }
 ]
 readme = "README.md"
 requires-python = ">=3.8"
