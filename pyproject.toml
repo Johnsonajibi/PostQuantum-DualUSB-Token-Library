@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pqcdualusb"
-version = "0.1.0"
+version = "0.1.1"
 description = "Enterprise-grade dual USB backup library with post-quantum cryptography protection for maximum security"
 authors = [
     { name = "Johnson Ajibi", email = "johnsonajibi@example.com" }
