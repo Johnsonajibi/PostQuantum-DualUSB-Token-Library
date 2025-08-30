@@ -122,6 +122,11 @@ All features are production-ready with comprehensive testing.
 - Python 3.8 or higher
 - Windows, Linux, or macOS
 
+**Install from PyPI:**
+```bash
+pip install pqcdualusb
+```
+
 **Install from source:**
 ```bash
 git clone https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library.git
@@ -138,7 +143,8 @@ pip install -e .
 
 **Test your installation:**
 ```bash
-python dual_usb_backup.py --help
+pqcdualusb --help  # If installed via pip
+python dual_usb_backup.py --help  # If installed from source
 python simple_test.py  # Run security tests
 ```
 
@@ -198,7 +204,7 @@ pqcdualusb restore \
 ```python
 import os
 from pathlib import Path
-from dual_usb_backup import (
+from pqcdualusb import (
     init_dual_usb, 
     verify_dual_setup, 
     UsbDriveDetector,
@@ -366,7 +372,7 @@ export DUAL_USB_ARGON2_P=4        # Parallel threads
 **Running Tests**
 ```bash
 # Basic functionality
-python dual_usb_backup.py
+python dual_usb_backup.py  # From source
 
 # Security features
 python simple_test.py
