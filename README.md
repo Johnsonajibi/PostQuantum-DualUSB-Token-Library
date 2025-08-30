@@ -224,95 +224,92 @@ with SecureMemory(64) as secure_buf:
 
 ---
 
-## 🗺️ Architecture
+## Architecture
 
-### Dual USB + AEAD Backup + Dual-Signed Audit Log
-```mermaid
-flowchart LR
-  subgraph User["User (Offline)"]
-    CLI["pqc-dualusb CLI / Library"]
-  end
+### System Overview
 
-  subgraph Primary["Primary USB (Live Token)"]
-    T["token_*.bin (plaintext token)"]
-    M["token_*.bin.meta.json (device-id, sha3, created_at)"]
-  end
+The dual USB backup system uses a **split-key architecture** where no single device contains enough information to compromise your data.
 
-  subgraph Backup["Backup USB (.system_backup)"]
-    B["token.enc.json (AEAD: Argon2id → AES-GCM)"]
-  end
-
-  subgraph Audit["Audit Log (host fs)"]
-    L["pqcdualusb_audit.log\nlines: base | hmac=... [| pq_sig=... | pq_alg=...]"]
-  end
-
-  subgraph PQ["(Optional) PQ Keys"]
-    PK["pq_audit_pk.bin (public)"]
-    SK["pq_audit_sk.bin (secret, on Primary)"]
-  end
-
-  CLI -- init/rotate/restore/verify --> Primary
-  CLI -- init/rotate/restore --> Backup
-  CLI -- append entries --> Audit
-  SK -. used to sign audit lines .-> Audit
-  PK -. used to verify audit .-> CLI
+```
+┌─────────────────┐    ┌─────────────────┐
+│   Primary USB   │    │   Backup USB    │
+│                 │    │                 │
+│ • Live token    │    │ • Encrypted     │
+│ • Device meta   │◄──►│   backup        │
+│ • PQ keys       │    │ • Audit logs    │
+└─────────────────┘    └─────────────────┘
+         │                       │
+         └───────┬───────────────┘
+                 ▼
+        ┌─────────────────┐
+        │   Your System   │
+        │                 │
+        │ • pqcdualusb    │
+        │ • Audit trail  │
+        │ • Progress UI   │
+        └─────────────────┘
 ```
 
-### Init / Rotate / Verify / Restore Flows
-```mermaid
-sequenceDiagram
-  autonumber
-  participant U as User
-  participant CLI as pqc-dualusb
-  participant P as Primary USB
-  participant B as Backup USB
-  participant LOG as Audit Log
+### Security Model
 
-  U->>CLI: init (primary, backup, passphrase)
-  CLI->>P: write token_*.bin (atomic)
-  CLI->>P: write token meta (device id and sha3)
-  CLI->>B: write token.enc.json (Argon2id -> AES-GCM)
-  CLI->>LOG: append audit entry (HMAC and optional Dilithium)
+**Defense in Depth:**
+- **Layer 1**: Physical separation (dual USB requirement)
+- **Layer 2**: Strong encryption (AES-256-GCM + Argon2id)  
+- **Layer 3**: Device binding (prevents USB cloning)
+- **Layer 4**: Audit logging (tamper-evident trail)
+- **Layer 5**: Post-quantum signatures (future-proof)
 
-  U->>CLI: rotate (prev-rotation n)
-  CLI->>P: write new token and meta
-  CLI->>B: write new encrypted backup (rotation n+1)
-  CLI->>LOG: append audit entry
+### Data Flow
 
-  U->>CLI: verify (enforce device, pq pk)
-  CLI->>P: read token and meta
-  CLI->>P: check device binding
-  CLI->>B: decrypt backup and compare SHA3-512
-  CLI->>LOG: verify HMAC chain and PQ signature
-  CLI-->>U: OK / FAIL and AUDIT_OK / AUDIT_FAIL
-
-  U->>CLI: restore (backup file, new primary)
-  CLI->>B: decrypt token in memory
-  CLI->>P: write token and meta (atomic)
-  CLI->>LOG: append audit entry
+**Setup Process:**
+```
+1. Generate secret → 2. Split across devices → 3. Encrypt backup → 4. Log operation
+     [64 bytes]         [Primary + Backup]      [AES-256-GCM]     [HMAC chain]
 ```
 
-### Threats & Defenses
-```mermaid
-mindmap
-  root((Threat Model))
-    Steal Backup (offline brute-force)
-      Symmetric AEAD
-        AES-256-GCM
-        Argon2id KDF (scrypt fallback)
-      Grover
-        256-bit keys ~ 128-bit PQ
-    Clone Primary USB
-      Device Binding
-        UUID/label/fs recorded in meta
-        Verify on access
-    Tamper / Downgrade
-      Audit Trail
-        HMAC-SHA256 chain
-        Dilithium signatures (PQ)
-    Torn Writes / Power Loss
-      Atomic Writes
-        temp file + fsync + replace
+**Verification Process:**
+```
+1. Read primary → 2. Decrypt backup → 3. Compare hashes → 4. Verify audit
+   [Live token]     [AES decrypt]       [SHA3-512]        [HMAC + PQ]
+```
+
+### Key Components
+
+| Component | Purpose | Security Feature |
+|-----------|---------|------------------|
+| **SecureMemory** | Protected RAM allocation | Memory locking, auto-clear |
+| **InputValidator** | Sanitize user inputs | Path traversal protection |  
+| **TimingAttackMitigation** | Prevent timing analysis | Constant-time operations |
+| **AuditLogRotator** | Manage log files | Size limits, secure rotation |
+| **UsbDriveDetector** | Find USB devices | Cross-platform detection |
+| **ProgressReporter** | User feedback | Thread-safe updates |
+
+### Threat Model
+
+| Attack Vector | Risk Level | Protection |
+|---------------|------------|------------|
+| **Stolen backup USB** | High | AES-256-GCM + strong KDF makes offline cracking infeasible |
+| **Cloned primary USB** | Medium | Device binding detects hardware fingerprint changes |
+| **Tampered audit logs** | Medium | HMAC chaining + optional post-quantum signatures |
+| **Memory dumps** | Low | Secure memory allocation prevents secrets in swap files |
+| **Timing attacks** | Low | Constant-time comparisons in all crypto operations |
+| **Power loss during write** | Low | Atomic file operations prevent corruption |
+
+### File Layout
+
+```
+Primary USB/
+├── token_1234567890.bin           # Live secret (64 bytes)
+├── token_1234567890.bin.meta.json # Device binding + metadata
+└── pq_audit_sk.bin                # Post-quantum private key (optional)
+
+Backup USB/
+└── .system_backup/
+    └── token.enc.json              # Encrypted backup + metadata
+
+Host System/
+├── ~/.pqcdualusb_audit.key        # HMAC key for audit chain
+└── pqcdualusb_audit.log           # Tamper-evident operation log
 ```
 
 ---
