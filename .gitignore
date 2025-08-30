@@ -69,4 +69,11 @@ Thumbs.db
 # Project specific
 *.log
 COMMIT_MESSAGE.md
+IMPROVEMENTS.md
 dd.py
+
+# Development and personal files
+notes.txt
+todo.txt
+scratch.py
+temp_*.py
