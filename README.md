@@ -1,6 +1,13 @@
 # PostQuantum-DualUSB-Token-Library
 
-A Python library**Core Security***Core Security****Oper-- - R- Atomic writes with crash-safe temp file operationsal-time progress reporting with ETA calculations and bandwidth monitoringnhanced USB detection with improved cross-platform drive detection
+A Python library**Core Security***Core Security****Oper-- -- - Real-- Atomic writes with crash-safe temp file operationsime progress reporting with ETA calculations and bandwidth monitoring
+- Enhanced USB detection with improved cross-platform drive detection
+- Interactive CLI with smart drive selection and detailed information
+- Atomic writes with crash-safe temp file operations
+- Cross-platform support for Linux, macOS, and Windowsced USB detection with improved cross-platform drive detection
+- Interactive CLI with smart drive selection and detailed information
+- Atomic writes with crash-safe temp file operations
+- Cross-platform support for Linux, macOS, and WindowsAtomic writes with crash-safe temp file operationsal-time progress reporting with ETA calculations and bandwidth monitoringnhanced USB detection with improved cross-platform drive detection
 - Interactive CLI with smart drive selection and detailed information
 - Atomic writes with crash-safe temp file operations
 - Cross-platform support for Linux, macOS, and WindowsAtomic writes with crash-safe temp file operationsal-time progress reporting with ETA calculations and bandwidth monitoringtional**
