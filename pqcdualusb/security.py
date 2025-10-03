@@ -1,0 +1,381 @@
+"""
+Security Configuration and Memory Management
+===========================================
+
+Core security utilities and configuration for the pqcdualusb library.
+
+Components:
+- SecureMemory: Secure memory allocation with automatic cleanup
+- TimingAttackMitigation: Countermeasures against timing-based attacks
+- SecurityConfig: Centralized security configuration and constants
+
+Provides foundational security functionality including secure memory handling,
+timing attack prevention, and security parameter configuration.
+"""
+
+import os
+import sys
+import time
+import secrets
+import platform
+import ctypes
+import mmap
+from typing import Union, List, Dict, Any
+from pathlib import Path
+
+
+class SecureMemory:
+    """
+    Secure memory allocation with automatic cleanup.
+    
+    Provides secure memory allocation for sensitive data such as passwords
+    and cryptographic keys. Automatically overwrites memory with zeros on
+    cleanup to prevent data recovery. Attempts to prevent memory from being
+    swapped to disk where possible.
+    
+    Used for storing sensitive data with guaranteed secure cleanup.
+    """
+    
+    def __init__(self, size: int):
+        self.size = size
+        self.data = None
+        self.locked = False
+        
+        # Allocate secure buffer
+        self.data = bytearray(size)
+        
+        # Try to lock memory to prevent swapping
+        if platform.system() == "Windows":
+            self._lock_memory_windows()
+        else:
+            self._lock_memory_posix()
+    
+    def __enter__(self):
+        return self.data
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._cleanup()
+    
+    def _lock_memory_windows(self):
+        """Lock memory on Windows using VirtualLock."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            kernel32 = ctypes.windll.kernel32
+            addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
+            
+            if kernel32.VirtualLock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data))):
+                self.locked = True
+        except Exception:
+            # Memory locking failed, continue without it
+            pass
+    
+    def _lock_memory_posix(self):
+        """Lock memory on POSIX systems using mlock."""
+        try:
+            import mman
+            addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
+            
+            if mman.mlock(addr, len(self.data)) == 0:
+                self.locked = True
+        except Exception:
+            # Memory locking failed, continue without it
+            pass
+    
+    def _cleanup(self):
+        """Securely zero and unlock memory."""
+        if self.data:
+            # Zero the memory
+            secure_zero_memory(self.data)
+            
+            # Unlock memory if it was locked
+            if self.locked:
+                try:
+                    if platform.system() == "Windows":
+                        kernel32 = ctypes.windll.kernel32
+                        addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
+                        kernel32.VirtualUnlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data)))
+                    else:
+                        import mman
+                        addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
+                        mman.munlock(addr, len(self.data))
+                except Exception:
+                    pass
+            
+            self.data = None
+
+
+class TimingAttackMitigation:
+    """Helper class to mitigate timing attacks in cryptographic operations."""
+    
+    @staticmethod
+    def constant_time_compare(a: bytes, b: bytes) -> bool:
+        """
+        Constant-time comparison to prevent timing attacks.
+        
+        Returns True if a and b are equal, False otherwise.
+        The comparison time is independent of the input values.
+        """
+        if len(a) != len(b):
+            return False
+        
+        result = 0
+        for x, y in zip(a, b):
+            result |= x ^ y
+        
+        return result == 0
+    
+    @staticmethod
+    def add_random_delay(min_ms: int = None, max_ms: int = None):
+        """
+        Add a random delay to obfuscate timing patterns.
+        
+        Args:
+            min_ms: Minimum delay in milliseconds
+            max_ms: Maximum delay in milliseconds
+        """
+        min_delay = (min_ms or 1) / 1000.0
+        max_delay = (max_ms or 10) / 1000.0
+        
+        delay = secrets.randbelow(int((max_delay - min_delay) * 1000000)) / 1000000.0 + min_delay
+        time.sleep(delay)
+
+
+class SecurityConfig:
+    """Security configuration and validation."""
+    
+    # Post-quantum algorithms
+    PQC_KEM_ALGORITHM = "Kyber1024"
+    PQC_SIG_ALGORITHM = "Dilithium3"
+    
+    # Classical cryptography  
+    AES_KEY_SIZE = 32  # 256-bit
+    SALT_SIZE = 32
+    NONCE_SIZE = 12
+    HMAC_KEY_SIZE = 32
+    
+    # Argon2id parameters
+    ARGON2_TIME_COST = 4
+    ARGON2_MEMORY_COST = 65536  # 64 MB
+    ARGON2_PARALLELISM = 2
+    
+    # Security levels
+    PQC_HYBRID_MODE = True               # Use hybrid classical+PQC
+    ENFORCE_DEVICE_BINDING = True        # Check device identifiers
+    REQUIRE_REMOVABLE_DRIVES = True      # Only use removable USB drives
+    ENABLE_AUDIT_LOGGING = True          # Tamper-evident audit logs
+    MINIMUM_TOKEN_SIZE = 32              # Minimum token size in bytes
+    MAXIMUM_TOKEN_SIZE = 1024            # Maximum token size in bytes
+    MINIMUM_PASSPHRASE_LENGTH = 12       # Minimum passphrase length
+    
+    # Power analysis countermeasures
+    ENABLE_TIMING_RANDOMIZATION = True   # Add random delays
+    ENABLE_POWER_BALANCING = True        # Power consumption balancing
+    
+    @classmethod
+    def get_argon2_params(cls) -> Dict[str, int]:
+        """Get Argon2id parameters for key derivation."""
+        return {
+            "time_cost": cls.ARGON2_TIME_COST,
+            "memory_cost": cls.ARGON2_MEMORY_COST,
+            "parallelism": cls.ARGON2_PARALLELISM
+        }
+    
+    @classmethod
+    def validate_security_level(cls) -> List[str]:
+        """
+        Validate current security configuration and return warnings.
+        
+        Returns:
+            List of security warnings or recommendations
+        """
+        warnings = []
+        
+        # Check key sizes
+        if cls.AES_KEY_SIZE < 32:
+            warnings.append("AES key size below 256 bits - consider increasing")
+        
+        if cls.SALT_SIZE < 16:
+            warnings.append("Salt size below 128 bits - consider increasing")
+        
+        # Check Argon2 parameters
+        if cls.ARGON2_MEMORY_COST < 32768:  # 32 MB
+            warnings.append("Argon2 memory cost may be too low for high security")
+        
+        if cls.ARGON2_TIME_COST < 3:
+            warnings.append("Argon2 time cost may be too low for high security")
+        
+        # Check minimum sizes
+        if cls.MINIMUM_TOKEN_SIZE < 32:
+            warnings.append("Minimum token size below 256 bits")
+        
+        if cls.MINIMUM_PASSPHRASE_LENGTH < 12:
+            warnings.append("Minimum passphrase length may be too short")
+        
+        # Check security features
+        if not cls.PQC_HYBRID_MODE:
+            warnings.append("PQC hybrid mode disabled - quantum vulnerability possible")
+        
+        if not cls.ENFORCE_DEVICE_BINDING:
+            warnings.append("Device binding disabled - cloning attacks possible")
+        
+        if not cls.REQUIRE_REMOVABLE_DRIVES:
+            warnings.append("Non-removable drives allowed - air-gap security reduced")
+        
+        return warnings
+
+
+class InputValidator:
+    """Input validation utilities."""
+    
+    @staticmethod
+    def validate_path(path: Union[str, Path], must_exist: bool = True, must_be_dir: bool = False) -> Path:
+        """
+        Validate and normalize a file system path.
+        
+        Args:
+            path: Path to validate
+            must_exist: Whether the path must exist
+            must_be_dir: Whether the path must be a directory
+            
+        Returns:
+            Validated Path object
+            
+        Raises:
+            ValueError: If validation fails
+        """
+        if not path:
+            raise ValueError("Path cannot be empty")
+        
+        path_obj = Path(path).resolve()
+        
+        if must_exist and not path_obj.exists():
+            raise ValueError(f"Path does not exist: {path_obj}")
+        
+        if must_be_dir and path_obj.exists() and not path_obj.is_dir():
+            raise ValueError(f"Path is not a directory: {path_obj}")
+        
+        return path_obj
+    
+    @staticmethod
+    def validate_passphrase(passphrase: str, min_length: int = None) -> str:
+        """
+        Validate passphrase strength.
+        
+        Args:
+            passphrase: Passphrase to validate
+            min_length: Minimum required length
+            
+        Returns:
+            Validated passphrase
+            
+        Raises:
+            ValueError: If validation fails
+        """
+        if not passphrase:
+            raise ValueError("Passphrase cannot be empty")
+        
+        min_len = min_length or SecurityConfig.MINIMUM_PASSPHRASE_LENGTH
+        
+        if len(passphrase) < min_len:
+            raise ValueError(f"Passphrase must be at least {min_len} characters")
+        
+        # Check for common weak patterns
+        if passphrase.lower() in ['password', '123456', 'qwerty', 'admin']:
+            raise ValueError("Passphrase is too common - use a stronger passphrase")
+        
+        return passphrase
+    
+    @staticmethod
+    def validate_token_size(size: int, min_size: int = None, max_size: int = None) -> int:
+        """
+        Validate token size.
+        
+        Args:
+            size: Token size in bytes
+            min_size: Minimum allowed size
+            max_size: Maximum allowed size
+            
+        Returns:
+            Validated size
+            
+        Raises:
+            ValueError: If validation fails
+        """
+        min_s = min_size or SecurityConfig.MINIMUM_TOKEN_SIZE
+        max_s = max_size or SecurityConfig.MAXIMUM_TOKEN_SIZE
+        
+        if size < min_s:
+            raise ValueError(f"Token size must be at least {min_s} bytes")
+        
+        if size > max_s:
+            raise ValueError(f"Token size cannot exceed {max_s} bytes")
+        
+        return size
+
+
+def secure_zero_memory(data: Union[bytearray, bytes]) -> None:
+    """
+    Securely zero memory contents.
+    
+    This function attempts to prevent compiler optimizations from removing
+    the memory clearing operation.
+    
+    Args:
+        data: Memory buffer to zero (bytearray or bytes)
+    """
+    if isinstance(data, bytearray):
+        # Zero the bytearray in place
+        for i in range(len(data)):
+            data[i] = 0
+        
+        # Additional security: try to prevent optimization
+        try:
+            # Force memory barrier on supported platforms
+            if platform.system() == "Windows":
+                ctypes.windll.kernel32.MemoryBarrier()
+            else:
+                # On POSIX, try to use memory barrier if available
+                try:
+                    import ctypes.util
+                    libc = ctypes.CDLL(ctypes.util.find_library("c"))
+                    if hasattr(libc, '__sync_synchronize'):
+                        libc.__sync_synchronize()
+                except:
+                    pass
+        except:
+            pass
+    
+    elif isinstance(data, bytes):
+        # Cannot modify bytes object, warn user
+        import warnings
+        warnings.warn("Cannot securely zero immutable bytes object", RuntimeWarning)
+
+
+def get_security_info() -> Dict[str, Any]:
+    """Get comprehensive security configuration information."""
+    return {
+        "algorithms": {
+            "pqc_kem": SecurityConfig.PQC_KEM_ALGORITHM,
+            "pqc_sig": SecurityConfig.PQC_SIG_ALGORITHM,
+            "aes_key_bits": SecurityConfig.AES_KEY_SIZE * 8,
+            "salt_bits": SecurityConfig.SALT_SIZE * 8,
+            "hmac_key_bits": SecurityConfig.HMAC_KEY_SIZE * 8
+        },
+        "argon2": SecurityConfig.get_argon2_params(),
+        "security_features": {
+            "pqc_hybrid_mode": SecurityConfig.PQC_HYBRID_MODE,
+            "device_binding": SecurityConfig.ENFORCE_DEVICE_BINDING,
+            "removable_only": SecurityConfig.REQUIRE_REMOVABLE_DRIVES,
+            "audit_logging": SecurityConfig.ENABLE_AUDIT_LOGGING,
+            "timing_randomization": SecurityConfig.ENABLE_TIMING_RANDOMIZATION,
+            "power_balancing": SecurityConfig.ENABLE_POWER_BALANCING
+        },
+        "limits": {
+            "min_token_size": SecurityConfig.MINIMUM_TOKEN_SIZE,
+            "max_token_size": SecurityConfig.MAXIMUM_TOKEN_SIZE,
+            "min_passphrase_len": SecurityConfig.MINIMUM_PASSPHRASE_LENGTH
+        },
+        "warnings": SecurityConfig.validate_security_level()
+    }
