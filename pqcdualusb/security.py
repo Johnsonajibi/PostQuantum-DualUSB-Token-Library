@@ -74,10 +74,17 @@ class SecureMemory:
     def _lock_memory_posix(self):
         """Lock memory on POSIX systems using mlock."""
         try:
-            import mman
+            # Get libc handle
+            if platform.system() == "Darwin":  # macOS
+                libc = ctypes.CDLL("libc.dylib")
+            else:  # Linux and other POSIX
+                libc = ctypes.CDLL("libc.so.6")
+            
+            # Get memory address
             addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
             
-            if mman.mlock(addr, len(self.data)) == 0:
+            # Call mlock system call
+            if libc.mlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data))) == 0:
                 self.locked = True
         except Exception:
             # Memory locking failed, continue without it
@@ -97,9 +104,14 @@ class SecureMemory:
                         addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
                         kernel32.VirtualUnlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data)))
                     else:
-                        import mman
+                        # Get libc handle for munlock
+                        if platform.system() == "Darwin":  # macOS
+                            libc = ctypes.CDLL("libc.dylib")
+                        else:  # Linux and other POSIX
+                            libc = ctypes.CDLL("libc.so.6")
+                        
                         addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
-                        mman.munlock(addr, len(self.data))
+                        libc.munlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data)))
                 except Exception:
                     pass
             
@@ -107,39 +119,183 @@ class SecureMemory:
 
 
 class TimingAttackMitigation:
-    """Helper class to mitigate timing attacks in cryptographic operations."""
+    """
+    Advanced timing attack mitigation for cryptographic operations.
+    
+    Implements multiple defense techniques:
+    - Constant-time comparisons
+    - Random delays with exponential distribution
+    - Operation padding to fixed time windows
+    - Statistical timing noise
+    """
     
     @staticmethod
     def constant_time_compare(a: bytes, b: bytes) -> bool:
         """
         Constant-time comparison to prevent timing attacks.
         
-        Returns True if a and b are equal, False otherwise.
-        The comparison time is independent of the input values.
-        """
-        if len(a) != len(b):
-            return False
+        Uses bitwise operations to ensure comparison time is independent
+        of where differences occur in the byte sequences.
         
+        Args:
+            a: First byte sequence
+            b: Second byte sequence
+        
+        Returns:
+            True if sequences are equal, False otherwise
+        """
+        # Length check must also be constant-time
+        length_match = len(a) == len(b)
+        
+        # Pad to same length for constant-time comparison
+        if not length_match:
+            # Pad shorter sequence to avoid early termination
+            max_len = max(len(a), len(b))
+            a = a.ljust(max_len, b'\x00')
+            b = b.ljust(max_len, b'\x00')
+        
+        # XOR all bytes - result is 0 only if all bytes match
         result = 0
         for x, y in zip(a, b):
             result |= x ^ y
         
-        return result == 0
+        # Return True only if both length matched AND all bytes matched
+        return length_match and (result == 0)
+    
+    @staticmethod
+    def constant_time_select(condition: bool, true_value: int, false_value: int) -> int:
+        """
+        Constant-time conditional selection.
+        
+        Selects between two values based on a condition without branching,
+        preventing timing attacks based on conditional execution paths.
+        
+        Args:
+            condition: Boolean condition
+            true_value: Value to return if condition is True
+            false_value: Value to return if condition is False
+        
+        Returns:
+            Selected value
+        """
+        # Convert bool to int: True=1, False=0
+        selector = int(condition)
+        
+        # Bitwise selection without branching
+        # If selector=1: returns true_value
+        # If selector=0: returns false_value
+        return (selector * true_value) | ((1 - selector) * false_value)
     
     @staticmethod
     def add_random_delay(min_ms: int = None, max_ms: int = None):
         """
-        Add a random delay to obfuscate timing patterns.
+        Add random delay with exponential distribution.
+        
+        Uses exponential distribution rather than uniform to better
+        obfuscate timing patterns in statistical analysis.
         
         Args:
-            min_ms: Minimum delay in milliseconds
-            max_ms: Maximum delay in milliseconds
+            min_ms: Minimum delay in milliseconds (default: 1)
+            max_ms: Maximum delay in milliseconds (default: 10)
         """
         min_delay = (min_ms or 1) / 1000.0
         max_delay = (max_ms or 10) / 1000.0
         
-        delay = secrets.randbelow(int((max_delay - min_delay) * 1000000)) / 1000000.0 + min_delay
+        # Exponential distribution for timing variation
+        import math
+        lambda_param = 2.0
+        
+        # Generate exponential random value
+        uniform = secrets.randbelow(1000000) / 1000000.0
+        exp_value = -math.log(1 - uniform) / lambda_param
+        
+        # Scale to desired range
+        delay = min_delay + (exp_value * (max_delay - min_delay))
+        delay = min(delay, max_delay)  # Cap at maximum
+        
         time.sleep(delay)
+    
+    @staticmethod
+    def pad_to_fixed_time(target_ms: float, start_time: float = None):
+        """
+        Pad operation to fixed time window.
+        
+        Ensures an operation takes at least a fixed amount of time,
+        preventing timing attacks based on operation duration.
+        
+        Args:
+            target_ms: Target duration in milliseconds
+            start_time: Start time (if None, uses current time)
+        """
+        if start_time is None:
+            start_time = time.perf_counter()
+        
+        elapsed = (time.perf_counter() - start_time) * 1000
+        remaining = target_ms - elapsed
+        
+        if remaining > 0:
+            # Add remaining time plus small random jitter
+            jitter = secrets.randbelow(1000) / 1000.0  # 0-1ms
+            time.sleep((remaining + jitter) / 1000.0)
+    
+    @staticmethod
+    def add_statistical_noise(operation_count: int = None):
+        """
+        Add statistical timing noise to obfuscate patterns.
+        
+        Performs a variable number of dummy operations to add
+        noise to timing measurements, making statistical analysis harder.
+        
+        Args:
+            operation_count: Number of dummy operations (random if None)
+        """
+        if operation_count is None:
+            # Random count with Poisson-like distribution
+            operation_count = secrets.randbelow(100) + 20
+        
+        # Dummy operations with varying complexity
+        dummy = secrets.token_bytes(16)
+        for i in range(operation_count):
+            # Variable complexity operations
+            if i % 3 == 0:
+                # Simple XOR
+                dummy = bytes(a ^ b for a, b in zip(dummy, secrets.token_bytes(16)))
+            elif i % 3 == 1:
+                # Bit rotation
+                value = int.from_bytes(dummy, 'big')
+                value = (value << 3) | (value >> 125)
+                dummy = value.to_bytes(16, 'big')
+            else:
+                # Modular arithmetic
+                value = int.from_bytes(dummy, 'big')
+                value = (value * 31337) % (2**128 - 1)
+                dummy = value.to_bytes(16, 'big')
+    
+    @classmethod
+    def protect_comparison(cls, a: bytes, b: bytes) -> bool:
+        """
+        Protected comparison with timing attack mitigation.
+        
+        Combines constant-time comparison with random delays
+        for defense-in-depth against timing attacks.
+        
+        Args:
+            a: First byte sequence
+            b: Second byte sequence
+        
+        Returns:
+            True if sequences are equal
+        """
+        # Add pre-comparison noise
+        cls.add_statistical_noise(secrets.randbelow(50) + 10)
+        
+        # Constant-time comparison
+        result = cls.constant_time_compare(a, b)
+        
+        # Add post-comparison noise
+        cls.add_random_delay(1, 5)
+        
+        return result
 
 
 class SecurityConfig:

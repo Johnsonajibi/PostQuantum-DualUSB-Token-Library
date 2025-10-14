@@ -19,9 +19,14 @@ import time
 import tempfile
 import threading
 import shutil
+import logging
 from pathlib import Path
-from typing import Union, Optional, Any, Generator, ContextManager
+from typing import Union, Optional, Any, Generator, ContextManager, Callable
 from contextlib import contextmanager
+
+# Configure secure logging
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 class ProgressReporter:
@@ -31,9 +36,12 @@ class ProgressReporter:
     Provides progress updates and statistics for operations that process data.
     Calculates throughput, ETA, and percentage completion.
     Thread-safe implementation for concurrent operations.
+    
+    For library usage, set progress_callback to receive updates instead of console output.
     """
     
-    def __init__(self, total_bytes: int = 0, description: str = "Processing"):
+    def __init__(self, total_bytes: int = 0, description: str = "Processing", 
+                 progress_callback: Optional[Callable[[str], None]] = None):
         self.total_bytes = total_bytes
         self.processed_bytes = 0
         self.description = description
@@ -41,8 +49,9 @@ class ProgressReporter:
         self.last_report_time = 0
         self.lock = threading.Lock()
         self._finished = False
+        self.progress_callback = progress_callback
         
-        # Print initial status
+        # Print initial status only if callback not provided (CLI mode)
         self._report_progress()
     
     def update(self, bytes_processed: int):
@@ -90,13 +99,28 @@ class ProgressReporter:
             processed_str = self._format_bytes(self.processed_bytes)
             total_str = self._format_bytes(self.total_bytes)
             
-            print(f"\r{self.description}: {percentage:5.1f}% ({processed_str}/{total_str}) "
-                  f"Speed: {speed_str} ETA: {eta_str}", end="", flush=True)
+            progress_msg = (f"\r{self.description}: {percentage:5.1f}% ({processed_str}/{total_str}) "
+                           f"Speed: {speed_str} ETA: {eta_str}")
+            
+            if self.progress_callback:
+                self.progress_callback(progress_msg)
+            else:
+                # Only print to console if no callback (CLI mode)
+                print(progress_msg, end="", flush=True)
+                
+            logger.debug(f"Progress: {percentage:.1f}% ({processed_str}/{total_str})")
         else:
             # Indeterminate progress
             processed_str = self._format_bytes(self.processed_bytes)
             elapsed_str = self._format_time(time.time() - self.start_time)
-            print(f"\r{self.description}: {processed_str} processed in {elapsed_str}", end="", flush=True)
+            progress_msg = f"\r{self.description}: {processed_str} processed in {elapsed_str}"
+            
+            if self.progress_callback:
+                self.progress_callback(progress_msg)
+            else:
+                print(progress_msg, end="", flush=True)
+                
+            logger.debug(f"Progress: {processed_str} in {elapsed_str}")
     
     def finish(self):
         """Mark progress as finished and print final status."""
@@ -112,10 +136,17 @@ class ProgressReporter:
             if elapsed > 0:
                 avg_speed = self.processed_bytes / elapsed
                 speed_str = self._format_bytes(avg_speed) + "/s"
-                print(f"\r{self.description}: Complete! {processed_str} in {elapsed_str} "
-                      f"(avg {speed_str})                    ")
+                final_msg = (f"\r{self.description}: Complete! {processed_str} in {elapsed_str} "
+                           f"(avg {speed_str})                    ")
             else:
-                print(f"\r{self.description}: Complete! {processed_str}                    ")
+                final_msg = f"\r{self.description}: Complete! {processed_str}                    "
+            
+            if self.progress_callback:
+                self.progress_callback(final_msg)
+            else:
+                print(final_msg)
+                
+            logger.info(f"Operation complete: {processed_str} in {elapsed_str}")
     
     @staticmethod
     def _format_bytes(bytes_count: float) -> str:
@@ -201,10 +232,10 @@ class AuditLogRotator:
                     else:
                         break
                 
-                print(f"Log rotated: {self.log_file} -> {rotated_file}")
+                logger.info(f"Log rotated: {self.log_file} -> {rotated_file}")
                 
             except OSError as e:
-                print(f"Warning: Log rotation failed: {e}", file=sys.stderr)
+                logger.error(f"Log rotation failed: {e}")
 
 
 @contextmanager
@@ -298,9 +329,6 @@ def cleanup_sensitive_data():
     # Force garbage collection
     for _ in range(3):
         gc.collect()
-    
-    # Additional cleanup could be added here
-    # This is mainly a placeholder for any global cleanup needed
 
 
 class FileOperations:

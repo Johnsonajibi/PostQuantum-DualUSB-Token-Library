@@ -26,7 +26,7 @@ Usage:
     
     # Find USB drives
     drives = UsbDriveDetector.get_removable_drives()
-    print(f"Found {len(drives)} USB drives")
+    # Use logging for status messages instead of print()
 """
 
 __version__ = "0.1.0"
@@ -34,7 +34,7 @@ __author__ = "PQC Dual USB Team"
 __license__ = "MIT"
 
 # Main public API exports
-from .crypto import PostQuantumCrypto, HybridCrypto
+from .crypto import PostQuantumCrypto, HybridCrypto, PqcBackend
 from .backup import BackupManager
 from .usb import UsbDriveDetector  
 from .security import SecurityConfig, SecureMemory, TimingAttackMitigation
@@ -45,6 +45,7 @@ __all__ = [
     # Core classes
     "PostQuantumCrypto",
     "HybridCrypto", 
+    "PqcBackend",  # Backend enum for checking active backend
     "BackupManager",
     "UsbDriveDetector",
     

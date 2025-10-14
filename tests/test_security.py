@@ -19,11 +19,11 @@ import json
 # Import the main library
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from dual_usb_backup import (
-    init_dual_usb,
-    verify_dual_setup,
+from pqcdualusb import (
+    PostQuantumCrypto,
+    HybridCrypto,
     UsbDriveDetector,
-    SecureMemory,
+    SecurityConfig,
     ProgressReporter,
     TimingAttackMitigation,
     AuditLogRotator

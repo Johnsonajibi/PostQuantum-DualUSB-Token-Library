@@ -94,15 +94,39 @@ class BackupManager:
             
         Returns:
             Dict with operation results and metadata
+            
+        Raises:
+            ValueError: If validation fails
+            RuntimeError: If operation fails
         """
+        # Input validation
+        if not isinstance(secret_data, bytes):
+            raise ValueError("secret_data must be bytes")
+        
+        if not secret_data:
+            raise ValueError("secret_data cannot be empty")
+        
+        if len(secret_data) > 100 * 1024 * 1024:  # 100MB limit
+            raise ValueError("secret_data exceeds maximum size (100MB)")
+        
+        if not isinstance(passphrase, str) or len(passphrase) < 8:
+            raise ValueError("passphrase must be at least 8 characters")
+        
+        if description and len(description) > 1000:
+            raise ValueError("description too long (max 1000 characters)")
+        
         if not self.primary_path or not self.backup_path:
             raise ValueError("Both primary and backup paths must be set")
+        
+        # Path traversal protection - ensure paths are absolute and resolved
+        self.primary_path = self.primary_path.resolve()
+        self.backup_path = self.backup_path.resolve()
         
         # Validate USB devices
         validation = self.validate_usb_devices()
         if not all([validation["primary_available"], validation["backup_available"],
                    validation["primary_writable"], validation["backup_writable"]]):
-            raise RuntimeError(f"USB validation failed: {validation}")
+            raise RuntimeError(f"USB validation failed")
         
         progress = ProgressReporter(len(secret_data), "Initializing token")
         
@@ -193,25 +217,49 @@ class BackupManager:
     
     def _write_backup_files(self, backup_dir: Path, encrypted_package: Dict[str, Any],
                            metadata: Dict[str, Any], signature: bytes, kem_secret: bytes):
-        """Write backup files to a directory."""
+        """
+        Write backup files to a directory.
+        
+        Args:
+            backup_dir: Directory to write files to
+            encrypted_package: Encrypted data package
+            metadata: Backup metadata
+            signature: Digital signature
+            kem_secret: KEM secret key
+            
+        Raises:
+            ValueError: If paths are invalid
+            RuntimeError: If write operation fails
+        """
+        # Path traversal protection
+        backup_dir = backup_dir.resolve()
+        
+        # Validate all file paths are within backup directory
+        token_path = backup_dir / self.token_filename
+        metadata_path = backup_dir / self.metadata_filename
+        signature_path = backup_dir / self.signature_filename
+        secret_key_path = backup_dir / "kem_secret.key"
+        
+        # Ensure no path traversal
+        for path in [token_path, metadata_path, signature_path, secret_key_path]:
+            try:
+                path.resolve().relative_to(backup_dir.resolve())
+            except ValueError:
+                raise RuntimeError("Path traversal detected in backup filenames")
         
         # Write encrypted token
-        token_path = backup_dir / self.token_filename
         with open(token_path, 'w') as f:
             json.dump(encrypted_package, f, indent=2)
         
         # Write metadata
-        metadata_path = backup_dir / self.metadata_filename
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         
         # Write signature
-        signature_path = backup_dir / self.signature_filename
         with open(signature_path, 'wb') as f:
             f.write(signature)
         
         # Write secret key (encrypted with passphrase)
-        secret_key_path = backup_dir / "kem_secret.key"
         with open(secret_key_path, 'wb') as f:
             f.write(kem_secret)
     
@@ -278,29 +326,61 @@ class BackupManager:
             raise RuntimeError(f"Backup verification failed: {e}")
     
     def _verify_single_backup(self, backup_dir: Path, passphrase: str) -> Dict[str, Any]:
-        """Verify a single backup directory."""
+        """
+        Verify a single backup directory.
+        
+        Args:
+            backup_dir: Directory containing backup files
+            passphrase: Passphrase for decryption
+            
+        Returns:
+            Dict with verification results
+        """
+        # Path traversal protection
+        backup_dir = backup_dir.resolve()
         
         if not backup_dir.exists():
             return {"valid": False, "error": "Backup directory not found"}
         
         try:
-            # Load metadata
+            # Construct and validate file paths
             metadata_path = backup_dir / self.metadata_filename
+            token_path = backup_dir / self.token_filename
+            signature_path = backup_dir / self.signature_filename
+            secret_key_path = backup_dir / "kem_secret.key"
+            
+            # Ensure no path traversal in any file path
+            for path in [metadata_path, token_path, signature_path, secret_key_path]:
+                try:
+                    path.resolve().relative_to(backup_dir.resolve())
+                except ValueError:
+                    return {"valid": False, "error": "Invalid file path detected"}
+            
+            # Load metadata with size limit
+            if metadata_path.stat().st_size > 10 * 1024:  # 10KB limit
+                return {"valid": False, "error": "Metadata file too large"}
+                
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
             
-            # Load encrypted package
-            token_path = backup_dir / self.token_filename
+            # Load encrypted package with size limit
+            if token_path.stat().st_size > 110 * 1024 * 1024:  # 110MB limit
+                return {"valid": False, "error": "Token file too large"}
+                
             with open(token_path, 'r') as f:
                 encrypted_package = json.load(f)
             
-            # Load signature
-            signature_path = backup_dir / self.signature_filename
+            # Load signature with size limit
+            if signature_path.stat().st_size > 10 * 1024:  # 10KB limit
+                return {"valid": False, "error": "Signature file too large"}
+                
             with open(signature_path, 'rb') as f:
                 signature = f.read()
             
-            # Load secret key
-            secret_key_path = backup_dir / "kem_secret.key"
+            # Load secret key with size limit
+            if secret_key_path.stat().st_size > 10 * 1024:  # 10KB limit
+                return {"valid": False, "error": "Secret key file too large"}
+                
             with open(secret_key_path, 'rb') as f:
                 kem_secret = f.read()
             
@@ -332,8 +412,11 @@ class BackupManager:
                 "data_size": len(decrypted_data)
             }
             
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            # Sanitize error messages - don't expose internal details
+            return {"valid": False, "error": "Backup validation failed"}
         except Exception as e:
-            return {"valid": False, "error": str(e)}
+            return {"valid": False, "error": "Backup verification error"}
     
     def restore_token(self, passphrase: str, prefer_primary: bool = True) -> Dict[str, Any]:
         """
@@ -345,9 +428,21 @@ class BackupManager:
             
         Returns:
             Dict with restored data and metadata
+            
+        Raises:
+            ValueError: If validation fails
+            RuntimeError: If restoration fails
         """
+        # Input validation
+        if not isinstance(passphrase, str) or len(passphrase) < 8:
+            raise ValueError("passphrase must be at least 8 characters")
+        
         if not self.primary_path or not self.backup_path:
             raise ValueError("Both primary and backup paths must be set")
+        
+        # Path traversal protection
+        self.primary_path = self.primary_path.resolve()
+        self.backup_path = self.backup_path.resolve()
         
         primary_backup_dir = self.primary_path / self.backup_dir
         backup_backup_dir = self.backup_path / self.backup_dir
@@ -375,24 +470,42 @@ class BackupManager:
         try:
             bytes_processed = 0
             
-            # Load metadata
+            # Validate file paths for traversal protection
             metadata_path = backup_dir / self.metadata_filename
+            token_path = backup_dir / self.token_filename
+            secret_key_path = backup_dir / "kem_secret.key"
+            
+            # Ensure no path traversal
+            for path in [metadata_path, token_path, secret_key_path]:
+                try:
+                    path.resolve().relative_to(backup_dir.resolve())
+                except ValueError:
+                    raise RuntimeError("Path traversal detected")
+            
+            # Load metadata with size limit
+            if metadata_path.stat().st_size > 10 * 1024:
+                raise RuntimeError("Metadata file too large")
+            
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
             
             bytes_processed += 100
             progress.update(bytes_processed)
             
-            # Load encrypted package
-            token_path = backup_dir / self.token_filename
+            # Load encrypted package with size limit
+            if token_path.stat().st_size > 110 * 1024 * 1024:
+                raise RuntimeError("Token file too large")
+            
             with open(token_path, 'r') as f:
                 encrypted_package = json.load(f)
             
             bytes_processed += 200
             progress.update(bytes_processed)
             
-            # Load secret key
-            secret_key_path = backup_dir / "kem_secret.key"
+            # Load secret key with size limit
+            if secret_key_path.stat().st_size > 10 * 1024:
+                raise RuntimeError("Secret key file too large")
+            
             with open(secret_key_path, 'rb') as f:
                 kem_secret = f.read()
             
@@ -426,9 +539,13 @@ class BackupManager:
                 "restored_from": str(backup_dir)
             }
             
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            progress.finish()
+            # Sanitize error - don't expose internal details
+            raise RuntimeError("Token restoration failed")
         except Exception as e:
             progress.finish()
-            raise RuntimeError(f"Token restoration failed: {e}")
+            raise RuntimeError("Token restoration failed")
     
     def list_backups(self) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -455,12 +572,39 @@ class BackupManager:
         return result
     
     def _list_device_backups(self, backup_dir: Path) -> List[Dict[str, Any]]:
-        """List backups in a single device directory."""
+        """
+        List backups in a single device directory.
+        
+        Args:
+            backup_dir: Directory to list backups from
+            
+        Returns:
+            List of backup information dictionaries
+        """
         backups = []
+        
+        # Path traversal protection
+        backup_dir = backup_dir.resolve()
         
         try:
             metadata_path = backup_dir / self.metadata_filename
+            
+            # Validate path is within backup_dir
+            try:
+                metadata_path.resolve().relative_to(backup_dir.resolve())
+            except ValueError:
+                return []  # Path traversal detected
+            
             if metadata_path.exists():
+                # Size limit check
+                if metadata_path.stat().st_size > 10 * 1024:
+                    backups.append({
+                        "error": "Metadata file too large",
+                        "path": str(backup_dir),
+                        "complete": False
+                    })
+                    return backups
+                
                 with open(metadata_path, 'r') as f:
                     metadata = json.load(f)
                 
@@ -484,10 +628,17 @@ class BackupManager:
                 
                 backups.append(backup_info)
         
-        except Exception as e:
-            # If we can't read metadata, still note that something exists
+        except (json.JSONDecodeError, KeyError) as e:
+            # JSON parsing errors - don't expose details
             backups.append({
-                "error": str(e),
+                "error": "Backup metadata corrupted",
+                "path": str(backup_dir),
+                "complete": False
+            })
+        except Exception as e:
+            # Other errors - generic message
+            backups.append({
+                "error": "Backup read error",
                 "path": str(backup_dir),
                 "complete": False
             })
@@ -498,14 +649,25 @@ class BackupManager:
         """
         Remove backup files from both devices.
         
+        WARNING: This permanently deletes backup data!
+        
         Args:
             confirm: Must be True to actually delete files
             
         Returns:
             Dict with cleanup results
+            
+        Raises:
+            ValueError: If confirm is not True
         """
         if not confirm:
             raise ValueError("cleanup_backup requires confirm=True to proceed")
+        
+        # Path traversal protection
+        if self.primary_path:
+            self.primary_path = self.primary_path.resolve()
+        if self.backup_path:
+            self.backup_path = self.backup_path.resolve()
         
         results = {
             "primary_cleaned": False,
@@ -515,23 +677,43 @@ class BackupManager:
         
         if self.primary_path:
             primary_backup_dir = self.primary_path / self.backup_dir
+            
+            # Validate path is within primary_path
+            try:
+                primary_backup_dir.resolve().relative_to(self.primary_path.resolve())
+            except ValueError:
+                results["errors"].append("Path validation failed for primary")
+                results["success"] = False
+                return results
+            
             try:
                 if primary_backup_dir.exists():
                     import shutil
                     shutil.rmtree(primary_backup_dir)
                     results["primary_cleaned"] = True
-            except Exception as e:
-                results["errors"].append(f"Primary cleanup failed: {e}")
+            except Exception:
+                # Don't expose internal errors
+                results["errors"].append("Primary cleanup failed")
         
         if self.backup_path:
             backup_backup_dir = self.backup_path / self.backup_dir
+            
+            # Validate path is within backup_path
+            try:
+                backup_backup_dir.resolve().relative_to(self.backup_path.resolve())
+            except ValueError:
+                results["errors"].append("Path validation failed for backup")
+                results["success"] = False
+                return results
+            
             try:
                 if backup_backup_dir.exists():
                     import shutil
                     shutil.rmtree(backup_backup_dir)
                     results["backup_cleaned"] = True
-            except Exception as e:
-                results["errors"].append(f"Backup cleanup failed: {e}")
+            except Exception:
+                # Don't expose internal errors
+                results["errors"].append("Backup cleanup failed")
         
         results["success"] = len(results["errors"]) == 0
         return results

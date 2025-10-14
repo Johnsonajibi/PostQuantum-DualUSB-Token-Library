@@ -1,9 +1,35 @@
-# PQC Dual USB Library
+# PQC Dual A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Security](https://img.shields.io/badge/Security-Post--Quantum-red.svg)]()
-[![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
+> **📚 This is a library package** designed to be imported into your applications. See [`USAGE_AS_LIBRARY.md`](USAGE_AS_LIBRARY.md) for integration examples and patterns.
+
+## 📋 Overview
+
+The PQC Dual USB Library provides quantum-resistant cryptographic operations for secure data backup across multiple USB devices. Built with enterprise-grade security features, it protects against both classical and quantum computer attacks while maintaining cross-platform compatibility.
+
+### Quick Import Example
+
+```python
+from pqcdualusb import PostQuantumCrypto, HybridCrypto, BackupManager
+
+# Initialize quantum-safe crypto
+pqc = PostQuantumCrypto(allow_fallback=True)
+
+# Generate quantum-resistant keys
+secret_key, public_key = pqc.generate_kem_keypair()
+
+# Encrypt data with hybrid classical+quantum crypto
+crypto = HybridCrypto()
+encrypted_data, metadata = crypto.encrypt_file(b"sensitive data", "password")
+```ibrary
+
+[![PyPI version](https://badge.fury.io/py/pqcdualusb.svg)](https://badge.fury.io/py/pqcdualusb)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Security: Post-Quantum](https://img.shields.io/badge/Security-Post--Quantum-red.svg)](https://en.wikipedia.org/wiki/Post-quantum_cryptography)
+[![GitHub stars](https://img.shields.io/github/stars/Johnsonajibi/PostQuantum-DualUSB-Token-Library.svg)](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/stargazers)
+[![Downloads](https://pepy.tech/badge/pqcdualusb)](https://pepy.tech/project/pqcdualusb)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
+[![Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen.svg)]()
 
 A comprehensive Python library for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 

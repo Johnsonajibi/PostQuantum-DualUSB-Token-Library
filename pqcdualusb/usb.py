@@ -135,29 +135,61 @@ class UsbDriveDetector:
         drives = []
         
         try:
-            # Method 1: diskutil
+            # Method 1: diskutil to get external devices
             result = subprocess.run([
                 "diskutil", "list", "-plist", "external"
             ], capture_output=True, text=True, timeout=10)
             
             if result.returncode == 0:
-                # Parse plist output would require plistlib, fallback to simple parsing
-                pass
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+                # Parse plist output for disk identifiers
+                import plistlib
+                try:
+                    plist_data = plistlib.loads(result.stdout.encode())
+                    if 'AllDisksAndPartitions' in plist_data:
+                        for disk_entry in plist_data['AllDisksAndPartitions']:
+                            if 'Partitions' in disk_entry:
+                                for partition in disk_entry['Partitions']:
+                                    if 'MountPoint' in partition:
+                                        mount_point = partition['MountPoint']
+                                        if mount_point and os.path.exists(mount_point):
+                                            drives.append(mount_point)
+                except (plistlib.InvalidFileException, KeyError):
+                    # Fallback to simple text parsing if plist parsing fails
+                    pass
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, ImportError):
             pass
         
+        # Method 2: Check /Volumes for removable devices
         try:
-            # Method 2: Check /Volumes
             volumes_path = "/Volumes"
             if os.path.exists(volumes_path):
                 for item in os.listdir(volumes_path):
                     full_path = os.path.join(volumes_path, item)
-                    if os.path.ismount(full_path) and item != "Macintosh HD":
-                        drives.append(full_path)
+                    if os.path.ismount(full_path) and item not in ["Macintosh HD", "System"]:
+                        # Additional check to see if it's removable using diskutil info
+                        try:
+                            info_result = subprocess.run([
+                                "diskutil", "info", full_path
+                            ], capture_output=True, text=True, timeout=5)
+                            
+                            if info_result.returncode == 0:
+                                info_text = info_result.stdout.lower()
+                                # Look for indicators of removable media
+                                if any(indicator in info_text for indicator in [
+                                    "removable media:", "yes",
+                                    "ejectable:", "yes",
+                                    "external:", "yes"
+                                ]):
+                                    drives.append(full_path)
+                            else:
+                                # Assume removable if diskutil info fails
+                                drives.append(full_path)
+                        except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+                            drives.append(full_path)
         except OSError:
             pass
         
-        return drives
+        return list(set(drives))  # Remove duplicates
     
     @staticmethod
     def is_drive_writable(drive_path: Path) -> bool:
@@ -351,20 +383,42 @@ class UsbDriveDetector:
             return f"{size:.1f} {units[unit_index]}"
     
     @staticmethod
-    def list_drives_interactive() -> Optional[Path]:
+    def list_drives_interactive(output_callback=None, input_callback=None) -> Optional[Path]:
         """
         Interactive drive selection for CLI use.
+        
+        NOTE: This function is for CLI tools only. Library users should call
+        get_removable_drives() directly and implement their own UI.
+        
+        Args:
+            output_callback: Optional callback(message: str) for output
+            input_callback: Optional callback(prompt: str) -> str for input
         
         Returns:
             Selected drive path or None if cancelled
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Default to print/input for CLI compatibility
+        if output_callback is None:
+            def output_callback(msg):
+                print(msg)
+        
+        if input_callback is None:
+            def input_callback(prompt):
+                return input(prompt)
+        
         drives = UsbDriveDetector.get_removable_drives()
         
         if not drives:
-            print("No removable drives found.")
+            output_callback("No removable drives found.")
+            logger.info("No removable drives detected")
             return None
         
-        print("Available removable drives:")
+        logger.info(f"Found {len(drives)} removable drives")
+        output_callback("Available removable drives:")
+        
         for i, drive in enumerate(drives, 1):
             info = UsbDriveDetector.get_drive_info(drive)
             size_str = UsbDriveDetector.format_drive_size(info["total_space"])
@@ -372,21 +426,25 @@ class UsbDriveDetector:
             label = info.get("label", "Unlabeled")
             filesystem = info.get("filesystem", "Unknown")
             
-            print(f"  {i}. {drive} [{label}] ({filesystem}, {size_str}, {free_str} free)")
+            output_callback(f"  {i}. {drive} [{label}] ({filesystem}, {size_str}, {free_str} free)")
         
         while True:
             try:
-                choice = input("\nSelect drive (1-{}) or 'q' to quit: ".format(len(drives)))
+                choice = input_callback("\nSelect drive (1-{}) or 'q' to quit: ".format(len(drives)))
                 if choice.lower() == 'q':
+                    logger.info("Drive selection cancelled by user")
                     return None
                 
                 index = int(choice) - 1
                 if 0 <= index < len(drives):
-                    return drives[index]
+                    selected = drives[index]
+                    logger.info(f"User selected drive: {selected}")
+                    return selected
                 else:
-                    print(f"Please enter a number between 1 and {len(drives)}")
+                    output_callback(f"Please enter a number between 1 and {len(drives)}")
             except (ValueError, KeyboardInterrupt):
-                print("\nOperation cancelled.")
+                output_callback("\nOperation cancelled.")
+                logger.info("Drive selection cancelled")
                 return None
 
 
