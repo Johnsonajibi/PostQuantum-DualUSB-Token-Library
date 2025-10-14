@@ -710,7 +710,7 @@ The pqcdualusb library has been thoroughly audited and all **18 security vulnera
 | 1.0 | Dec 2024 | crypto.py | 4 | ✅ Fixed |
 | 2.0 | Dec 2024 | All 7 files | 18 total | ✅ Fixed |
 
-**Auditor:** GitHub Copilot  
+**Auditor:** Security Team  
 **Review Status:** Complete  
 **Next Review:** Recommend after any major feature additions
 

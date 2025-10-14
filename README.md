@@ -466,9 +466,6 @@ python verify_cleanup.py
 
 # Comprehensive functionality test  
 python test_quick_verification.py
-
-# AI text and emoji cleanup verification
-python verify_ai_cleanup.py
 ```
 
 ## 📊 Performance Benchmarks

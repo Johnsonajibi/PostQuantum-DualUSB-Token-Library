@@ -309,8 +309,8 @@ The library provides enterprise-grade security for post-quantum cryptography ope
 
 | Version | Date | Auditor | Files | Issues | Status |
 |---------|------|---------|-------|--------|--------|
-| 1.0 | Dec 2024 | GitHub Copilot | crypto.py | 4 | ✅ Fixed |
-| 2.0 | Dec 2024 | GitHub Copilot | All 7 files | 18 | ✅ Fixed |
+| 1.0 | Dec 2024 | Security Team | crypto.py | 4 | ✅ Fixed |
+| 2.0 | Dec 2024 | Security Team | All 7 files | 18 | ✅ Fixed |
 
 **Next Review:** Recommended after major feature additions or 6 months
 
