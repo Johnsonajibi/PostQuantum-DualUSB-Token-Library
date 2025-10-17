@@ -433,8 +433,8 @@ graph TD
             E --> G{Kyber Secret Key (K_sec)}
         end
 
-        F -- Kyber KEM Encapsulate --> H{Ciphertext (CT)}
-        F -- Kyber KEM Encapsulate --> I{Shared Secret 1 (SS1)}
+        F -- "Kyber KEM Encapsulate" --> H{Ciphertext (CT)}
+        F -- "Kyber KEM Encapsulate" --> I{Shared Secret 1 (SS1)}
     end
 
     subgraph "Hybrid Key Generation"
