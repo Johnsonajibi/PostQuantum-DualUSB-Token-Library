@@ -33,16 +33,7 @@ encrypted_data, metadata = crypto.encrypt_file(b"sensitive data", "password")
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen.svg)]()
 
-# PQC Dual USB Library
 
-[![PyPI version](https://badge.fury.io/py/pqcdualusb.svg)](https://badge.fury.io/py/pqcdualusb)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Security: Post-Quantum](https://img.shields.io/badge/Security-Post--Quantum-red.svg)](https://en.wikipedia.org/wiki/Post-quantum_cryptography)
-[![GitHub stars](https://img.shields.io/github/stars/Johnsonajibi/PostQuantum-DualUSB-Token-Library.svg)](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/stargazers)
-[![Downloads](https://pepy.tech/badge/pqcdualusb)](https://pepy.tech/project/pqcdualusb)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
-[![Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen.svg)]()
 
 A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 
@@ -154,6 +145,160 @@ graph LR
     Crypto --> Security
     Security --> Utils
     USB --> Utils
+```
+
+### Hybrid Encryption Data Flow
+
+This diagram details the process flow within the `HybridCrypto.encrypt_with_pqc` method, showing how classical and post-quantum elements are combined to create a secure package.
+
+```mermaid
+graph TD
+    subgraph Input
+        A["Data (Bytes)"]
+        B["Passphrase (string)"]
+        C["Recipient PQC Public Key"]
+    end
+
+    subgraph "Step 1: PQC Key Encapsulation"
+        D["Kyber1024 KEM"]
+        C --> D
+        D --> E{"Ciphertext (for Shared Secret)"}
+        D --> F{"PQC Shared Secret"}
+    end
+
+    subgraph "Step 2: Classical Key Derivation"
+        G["Generate Salt"]
+        B -- Passphrase --> H{Argon2id KDF}
+        G -- Salt --> H
+        H --> I["AES-256 Key"]
+    end
+
+    subgraph "Step 3: Hybrid Key Combination"
+        F -- PQC Secret --> J{HMAC-SHA256}
+        I -- AES Key --> J
+        J --> K["Final Hybrid Encryption Key"]
+    end
+
+    subgraph "Step 4: AES-256-GCM Encryption"
+        A -- Plaintext --> L{AES-GCM Encrypt}
+        K -- Hybrid Key --> L
+        L --> M["Encrypted Data (Ciphertext)"]
+        L --> N["Authentication Tag"]
+    end
+
+    subgraph "Step 5: Package Assembly"
+        O["Assemble JSON Package"]
+        M --> O
+        N --> O
+        E --> O
+        G --> O
+    end
+
+    style H fill:#cce5ff,stroke:#333,stroke-width:2px
+    style J fill:#cce5ff,stroke:#333,stroke-width:2px
+    style L fill:#cce5ff,stroke:#333,stroke-width:2px
+```
+
+### Side-Channel Protection Architecture
+
+This diagram illustrates the layers of software-based side-channel protection applied during cryptographic operations.
+
+```mermaid
+graph TD
+    A["Cryptographic Operation Start"] --> B{Apply Pre-Operation Countermeasures};
+    
+    subgraph "Timing Attack Mitigation"
+        B --> C["Constant-Time Comparisons"];
+        C --> D["Instruction Jitter & Random NOPs"];
+        D --> E["Uniform Execution Path"];
+    end
+
+    subgraph "Power Analysis Mitigation"
+        B --> F["Randomized Dummy Operations"];
+        F --> G["Memory Access Pattern Obfuscation"];
+    end
+
+    subgraph "Secure Memory Handling"
+        B --> H["Use SecureMemory Context"];
+        H --> I["Automatic Memory Wiping (Zeroization)"];
+    end
+
+    E --> J["Execute Core Crypto Logic"];
+    G --> J;
+    I --> J;
+
+    J --> K["Cryptographic Operation End"];
+
+    style J fill:#f9f,stroke:#333,stroke-width:2px
+```
+
+## ⚙️ Core Workflows & Logic
+
+### PQC Backend Selection Logic
+
+The library prioritizes performance and security by intelligently selecting the best available Post-Quantum Cryptography backend. This flowchart illustrates the decision-making process upon initialization of the `PostQuantumCrypto` class.
+
+```mermaid
+graph TD
+    A[Start: PostQuantumCrypto.__init__] --> B{Rust PQC Backend Available?};
+    B -- Yes --> C[Set Backend = "rust_pqc"];
+    B -- No --> D{python-oqs Backend Available?};
+    D -- Yes --> E[Set Backend = "oqs"];
+    D -- No --> F[Raise RuntimeError: "No PQC backend found"];
+    C --> G[End: Ready for PQC Ops];
+    E --> G;
+```
+
+### Dual USB Backup Workflow (Conceptual)
+
+This sequence diagram outlines the conceptual workflow for the `BackupManager` to perform a secure, redundant backup to two USB drives.
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant BM as BackupManager
+    participant UDD as UsbDriveDetector
+    participant HC as HybridCrypto
+    
+    App->>BM: start_backup(data, passphrase)
+    BM->>UDD: get_removable_drives()
+    UDD-->>BM: [drive1, drive2]
+    
+    BM->>BM: Select two valid drives
+    
+    BM->>HC: encrypt_with_pqc(data, passphrase)
+    Note right of HC: Generates secure package with PQC
+    HC-->>BM: encrypted_package
+    
+    par Write to Drive 1
+        BM->>UDD: write_data(drive1, encrypted_package)
+        UDD-->>BM: write_success_1
+    and Write to Drive 2
+        BM->>UDD: write_data(drive2, encrypted_package)
+        UDD-->>BM: write_success_2
+    end
+    
+    BM->>BM: Verify both writes succeeded
+    BM-->>App: backup_complete_status
+```
+
+### Secure Memory Lifecycle
+
+This diagram shows the lifecycle of a `SecureMemory` block, ensuring that sensitive data is automatically cleared after use.
+
+```mermaid
+graph TD
+    A[Start: `with SecureMemory(size) as mem:`] --> B["1. Allocate Memory Buffer"];
+    B --> C["2. Lock Memory (prevents swapping to disk)"];
+    C --> D["3. Application performs sensitive operations on `mem`"];
+    D --> E["End: Exiting `with` block"];
+    E --> F["4. Overwrite buffer with random data (Pass 1)"];
+    F --> G["5. Overwrite buffer with zeros (Pass 2)"];
+    G --> H["6. Unlock and release memory"];
+    H --> I[End: Sensitive data is gone];
+
+    style D fill:#d4edda,stroke:#155724
+    style G fill:#f8d7da,stroke:#721c24
 ```
 
 ## 🌟 Key Features
@@ -299,7 +444,7 @@ The library includes a comprehensive test suite to ensure correctness and securi
 ### Running Tests
 ```bash
 # Install test dependencies
-pip install -e ".[test]"
+pip install -e ".[dev]"
 
 # Run all tests with verbose output
 python -m pytest tests/ -v
