@@ -65,29 +65,29 @@ This diagram illustrates the separation of concerns, from the high-level applica
 ```mermaid
 graph TD
     subgraph Application Layer
-        A[Your Application]
+        A["Your Application"]
     end
 
-    subgraph PQC Dual USB Library
-        B[Public API Facade]
-        subgraph Core Modules
-            C[crypto.py]
-            D[usb.py]
-            E[security.py]
-            F[backup.py]
+    subgraph "PQC Dual USB Library"
+        B["Public API Facade"]
+        subgraph "Core Modules"
+            C["crypto.py"]
+            D["usb.py"]
+            E["security.py"]
+            F["backup.py"]
         end
     end
 
-    subgraph Cryptographic Backends
-        G[Rust PQC (Primary)]
-        H[python-oqs (Fallback)]
-        I[cryptography (Classical)]
+    subgraph "Cryptographic Backends"
+        G["Rust PQC (Primary)"]
+        H["python-oqs (Fallback)"]
+        I["cryptography (Classical)"]
     end
 
-    subgraph System & Hardware Layer
-        J[Operating System APIs]
-        K[USB Hardware]
-        L[Secure Memory (RAM)]
+    subgraph "System & Hardware Layer"
+        J["Operating System APIs"]
+        K["USB Hardware"]
+        L["Secure Memory (RAM)"]
     end
 
     A --> B
@@ -110,30 +110,30 @@ This diagram shows the relationships and key responsibilities of each module wit
 ```mermaid
 graph LR
     subgraph Application
-        App[Client Code]
+        App["Client Code"]
     end
 
-    subgraph PQC_Library [pqcdualusb Library]
+    subgraph "PQC Library" [pqcdualusb Library]
         direction LR
-        subgraph API [Public API]
-            PQC[PostQuantumCrypto]
-            HC[HybridCrypto]
-            UDD[UsbDriveDetector]
-            BM[BackupManager]
+        subgraph "API" [Public API]
+            PQC["PostQuantumCrypto"]
+            HC["HybridCrypto"]
+            UDD["UsbDriveDetector"]
+            BM["BackupManager"]
         end
 
-        subgraph Core_Logic [Core Modules]
-            Crypto[crypto.py]
-            USB[usb.py]
-            Security[security.py]
-            Backup[backup.py]
-            Utils[utils.py]
+        subgraph "Core Logic" [Core Modules]
+            Crypto["crypto.py"]
+            USB["usb.py"]
+            Security["security.py"]
+            Backup["backup.py"]
+            Utils["utils.py"]
         end
 
-        subgraph Backends
-            Rust[Rust PQC]
-            OQS[python-oqs]
-            Classic[cryptography]
+        subgraph "Backends"
+            Rust["Rust PQC"]
+            OQS["python-oqs"]
+            Classic["cryptography"]
         end
     end
 
