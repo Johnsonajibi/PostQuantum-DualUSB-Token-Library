@@ -35,7 +35,6 @@ __license__ = "MIT"
 
 # Main public API exports
 from .crypto import PostQuantumCrypto, HybridCrypto, PqcBackend
-from .backup import BackupManager
 from .usb import UsbDriveDetector  
 from .security import SecurityConfig, SecureMemory, TimingAttackMitigation
 from .utils import ProgressReporter, InputValidator
@@ -46,7 +45,6 @@ __all__ = [
     "PostQuantumCrypto",
     "HybridCrypto", 
     "PqcBackend",  # Backend enum for checking active backend
-    "BackupManager",
     "UsbDriveDetector",
     
     # Security utilities

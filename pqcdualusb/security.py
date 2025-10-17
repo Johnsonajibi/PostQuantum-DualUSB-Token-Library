@@ -328,6 +328,10 @@ class SecurityConfig:
     # Power analysis countermeasures
     ENABLE_TIMING_RANDOMIZATION = True   # Add random delays
     ENABLE_POWER_BALANCING = True        # Power consumption balancing
+
+    # Audit log settings
+    MAX_LOG_SIZE = 10 * 1024 * 1024  # 10 MB
+    MAX_LOG_FILES = 5
     
     @classmethod
     def get_argon2_params(cls) -> Dict[str, int]:

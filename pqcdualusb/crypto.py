@@ -47,6 +47,15 @@ import logging
 from pathlib import Path
 from typing import Tuple, Optional, Dict, Any
 from enum import Enum, auto
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+try:
+    from argon2.low_level import hash_secret_raw, Type as Argon2Type
+    HAS_ARGON2 = True
+except ImportError:
+    HAS_ARGON2 = False
+import json
 
 # ============================================================================
 # Secure Logging Configuration
@@ -90,7 +99,7 @@ except ImportError:
 
 # Try to import Argon2
 try:
-    from argon2 import hash_secret_raw, Argon2Type
+    from argon2.low_level import hash_secret_raw, Type as Argon2Type
     HAS_ARGON2 = True
 except ImportError:
     HAS_ARGON2 = False
@@ -344,8 +353,50 @@ def secure_pqc_execute(func, *args, **kwargs):
 # ============================================================================
 
 # SecurityConfig has all our crypto parameters (key sizes, iteration counts, etc.)
-from .security import SecurityConfig
+from .security import SecurityConfig, SecureMemory, secure_zero_memory, TimingAttackMitigation
 
+_SCRYPT_WARNED = False
+
+def _derive_key(passphrase: str, salt: bytes) -> tuple[bytes, dict]:
+    """Derive encryption key using Argon2id or scrypt with secure memory handling."""
+    global _SCRYPT_WARNED
+    # Use secure memory for sensitive operations
+    passphrase_bytes = passphrase.encode('utf-8')
+    
+    try:
+        with SecureMemory(len(passphrase_bytes) + SecurityConfig.AES_KEY_SIZE) as secure_buf:
+            # Copy passphrase to secure memory
+            secure_buf[:len(passphrase_bytes)] = passphrase_bytes
+            
+            if HAS_ARGON2:
+                params = SecurityConfig.get_argon2_params()
+                try:
+                    # Use secure memory buffer for key derivation
+                    key = hash_secret_raw(
+                        bytes(secure_buf[:len(passphrase_bytes)]), 
+                        salt, 
+                        time_cost=params["time_cost"], 
+                        memory_cost=params["memory_cost"], 
+                        parallelism=params["parallelism"], 
+                        hash_len=SecurityConfig.AES_KEY_SIZE, 
+                        type=Argon2Type.ID
+                    )
+                    return key, {"kdf": "argon2id", **params}
+                except Exception as e:  # rare
+                    _logger.warning("Argon2 failed: %s; falling back to scrypt.", e)
+            else:
+                if not _SCRYPT_WARNED:
+                    _logger.warning("Argon2 not available; falling back to scrypt (install argon2-cffi).")
+                    _SCRYPT_WARNED = True
+            
+            # Fallback to scrypt
+            kdf = Scrypt(salt=salt, length=SecurityConfig.AES_KEY_SIZE, n=2**15, r=8, p=1)
+            key = kdf.derive(bytes(secure_buf[:len(passphrase_bytes)]))
+            return key, {"kdf": "scrypt", "n": 2**15, "r": 8, "p": 1}
+    finally:
+        # Clear passphrase from memory
+        if 'passphrase_bytes' in locals():
+            secure_zero_memory(bytearray(passphrase_bytes))
 
 class PqcBackend(Enum):
     """Post-quantum cryptography backend types."""
@@ -1027,6 +1078,61 @@ class HybridCrypto:
             return aes_gcm.decrypt(nonce, ciphertext, None)
         except InvalidTag:
             raise ValueError("Decryption failed - invalid key or corrupted data")
+
+
+def _encrypt_backup(plaintext: bytes, passphrase: str, meta: dict) -> bytes:
+    salt = os.urandom(16)
+    key, kdf_params = _derive_key(passphrase, salt)
+    aes = AESGCM(key)
+    nonce = os.urandom(12)
+    aad = json.dumps(meta, separators=(",", ":")).encode()
+    ct = aes.encrypt(nonce, plaintext, aad)
+    payload = {"meta": meta, "kdf": {**kdf_params, "salt": salt.hex()}, "aead": {"alg": "AES-256-GCM", "nonce": nonce.hex(), "ct": ct.hex()}}
+    return json.dumps(payload, separators=(",", ":")).encode()
+
+
+def verify_backup(backup_file: Path, passphrase: str, token: bytes) -> bool:
+    """Decrypt backup and check it matches `token` by SHA3-512 with timing attack protection."""
+    try:
+        TimingAttackMitigation.add_random_delay()
+        
+        data = json.loads(backup_file.read_text("utf-8"))
+        meta = data["meta"]
+        aead = data["aead"]
+        salt = bytes.fromhex(data["kdf"]["salt"])
+        
+        key, _ = _derive_key(passphrase, salt)
+        
+        pt = AESGCM(key).decrypt(
+            bytes.fromhex(aead["nonce"]), 
+            bytes.fromhex(aead["ct"]), 
+            json.dumps(meta, separators=(",", ":")).encode()
+        )
+        
+        backup_hash = hashlib.sha3_512(pt).digest()
+        expected_hash = hashlib.sha3_512(token).digest()
+        # The hash in the metadata is hex-encoded
+        meta_hash = bytes.fromhex(meta["sha3"])
+        
+        hash_match = (
+            TimingAttackMitigation.constant_time_compare(backup_hash, expected_hash) and
+            TimingAttackMitigation.constant_time_compare(backup_hash, meta_hash)
+        )
+        
+        secure_zero_memory(bytearray(key))
+        secure_zero_memory(bytearray(pt))
+        
+        return hash_match
+    
+    except InvalidTag:
+        # This is the expected exception for a wrong passphrase. Re-raise it.
+        if 'key' in locals():
+            secure_zero_memory(bytearray(key))
+        raise
+    except Exception:
+        if 'key' in locals():
+            secure_zero_memory(bytearray(key))
+        return False
 
 
 def get_available_backends() -> Dict[str, bool]:

@@ -46,7 +46,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pqc = [
-    "oqs-python>=0.5.0",
+    "oqs>=0.5.0",
 ]
 dev = [
     "pytest>=6.0.0",

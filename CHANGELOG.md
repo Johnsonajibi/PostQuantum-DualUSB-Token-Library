@@ -7,53 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Comprehensive architectural diagrams to `README.md` using Mermaid.js.
-- Detailed "Threat Model and Security Guarantees" section to `README.md`.
-- Project "Roadmap" section to `README.md`.
-
 ### Changed
-- **BREAKING CHANGE**: Completely restructured and consolidated `README.md` for clarity and accuracy. Removed significant duplicated content.
-- Synchronized `PYPI_README.md` with the new, streamlined `README.md` content.
-- Moved badges to the top of `README.md`.
+- **BREAKING CHANGE**: Refactored the entire project from a single script into a modular, installable Python package named `pqcdualusb`.
+- Replaced the high-level `BackupManager` class with a functional API (`init_dual_usb`, `rotate_token`, etc.) for more granular control.
+- Migrated all cryptographic logic, PQC operations, device handling, and auditing into separate modules (`crypto.py`, `pqc.py`, `device.py`, `audit.py`).
+- Updated the PQC backend logic to prioritize a high-performance Rust implementation and fall back to `python-oqs`.
+- Replaced manual file operations with a dedicated `storage.py` module for managing state and orchestrating backups.
+
+### Added
+- Created a comprehensive test suite (`tests/test_all.py`) using `unittest` and `unittest.mock` to validate all core functionality.
+- Implemented a `pyproject.toml` for modern, standardized package building and dependency management.
+- Added a `build_rust_pqc.py` script to facilitate the compilation of the Rust backend.
+- Created a `cli.py` as a reference implementation for using the library's functions.
+
+### Fixed
+- Corrected numerous `ImportError` and `AttributeError` issues that arose from the refactoring.
+- Resolved a `TypeError` in `storage.py` where a `Path` object was incorrectly passed instead of `bytes`.
+- Fixed a bug in `crypto.py` where `InvalidTag` exceptions were not being correctly propagated on passphrase mismatch.
+- Patched tests to correctly mock file system interactions (`_is_removable_path`), allowing the test suite to run in any environment.
+
+### Removed
+- Removed the monolithic `dual_usb_backup.py` script, with all its logic now residing in the `pqcdualusb` package.
 
 ## [0.1.0] - 2025-08-30
 
 ### Added
-- **Post-quantum cryptography** support with Dilithium digital signatures
-- **Dual USB token architecture** with split secret design
-- **Memory protection** with secure allocation and automatic cleanup
-- **Timing attack resistance** with constant-time operations
-- **Real-time progress reporting** with ETA and bandwidth monitoring
-- **Cross-platform USB detection** for Windows, Linux, and macOS
-- **Atomic write operations** preventing data corruption
-- **Comprehensive audit logging** with tamper-evident chains
-- **Interactive CLI** with smart drive selection
-- **Python API** for programmatic access
-- **Extensive test suite** with security validation
-- **Professional documentation** with usage examples
+- Initial release of the monolithic script version.
+- **Post-quantum cryptography** support with Dilithium digital signatures.
+- **Dual USB token architecture** with split secret design.
+- **Memory protection** with secure allocation and automatic cleanup.
+- **Timing attack resistance** with constant-time operations.
+- **Cross-platform USB detection** for Windows, Linux, and macOS.
+- **Atomic write operations** to prevent data corruption.
+- **Comprehensive audit logging** with tamper-evident chains.
+- **Interactive CLI** with smart drive selection.
 
-### Security Features
-- AES-256-GCM authenticated encryption
-- Argon2id key derivation function
-- HMAC-SHA256 audit log chaining
-- Memory locking (VirtualLock/mlock)
-- Secure memory clearing
-- Input validation and sanitization
-- Path traversal protection
-- Device binding and cloning detection
-
-### Performance
-- Optimized cryptographic operations
-- Efficient USB device detection
-- Progress reporting with minimal overhead
-- Memory usage optimization
-
-### Documentation
-- Comprehensive README with examples
-- API documentation with type hints
-- Security model documentation
-- Contributing guidelines
-- Installation instructions for PyPI
-
+[Unreleased]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/releases/tag/v0.1.0

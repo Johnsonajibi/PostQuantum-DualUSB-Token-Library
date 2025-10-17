@@ -1,134 +1,80 @@
-# Contributing to PostQuantum DualUSB Token Library
+# Contributing to the PQC Dual USB Library
 
-Thank you for your interest in contributing! This document provides guidelines for contributing to this project.
-
-## Code of Conduct
-
-This project adheres to a code of conduct that all contributors are expected to follow:
-- Be respectful and inclusive
-- Focus on constructive feedback
-- Help others learn and grow
+Thank you for your interest in contributing! This document provides guidelines for contributing to this project. By participating, you are expected to uphold our Code of Conduct.
 
 ## How to Contribute
 
-### Reporting Bugs
-- Use the GitHub Issues template
-- Include steps to reproduce
-- Provide system information (OS, Python version)
-- Include relevant log outputs
+We welcome contributions in the form of bug reports, feature suggestions, and pull requests.
 
-### Suggesting Features
-- Check existing issues first
-- Provide clear use cases
-- Consider security implications
-- Discuss implementation approach
+### Reporting Bugs & Suggesting Features
+-   **Use GitHub Issues**: Please use the issue templates for bugs or feature requests.
+-   **Be Detailed**: For bugs, provide steps to reproduce, your OS, Python version, and any relevant logs. For features, explain the use case and security implications.
 
 ### Development Process
 
-1. **Fork and Clone**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/PostQuantum-DualUSB-Token-Library.git
-   cd PostQuantum-DualUSB-Token-Library
-   ```
+1.  **Fork & Clone**: Fork the repository and clone it to your local machine.
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/PostQuantum-DualUSB-Token-Library.git
+    cd PostQuantum-DualUSB-Token-Library
+    ```
 
-2. **Set up Development Environment**
-   ```bash
-   pip install -e ".[dev]"
-   pre-commit install
-   ```
+2.  **Set up Development Environment**: Create a virtual environment and install the library in editable mode with development dependencies.
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install -e ".[dev]"
+    ```
 
-3. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+3.  **Install Pre-commit Hooks**: This will automatically format and lint your code before each commit.
+    ```bash
+    pre-commit install
+    ```
 
-4. **Make Changes**
-   - Follow PEP 8 style guidelines
-   - Add tests for new functionality
-   - Update documentation as needed
-   - Ensure security best practices
+4.  **Create a Feature Branch**:
+    ```bash
+    git checkout -b feature/your-awesome-feature
+    ```
 
-5. **Test Your Changes**
-   ```bash
-   python -m pytest tests/ -v
-   python simple_test.py
-   black --check .
-   ruff check .
-   ```
+5.  **Make Your Changes**:
+    -   Write clean, readable code that follows PEP 8.
+    -   Add or update tests for any new functionality.
+    -   Update documentation (`README.md`, docstrings) as needed.
+    -   Always prioritize security.
 
-6. **Submit Pull Request**
-   - Use clear, descriptive commit messages
-   - Reference related issues
-   - Include test results
-   - Update CHANGELOG.md
+6.  **Test Your Changes**: Run the full test suite and linters to ensure everything is working correctly.
+    ```bash
+    # Run all unit tests with verbose output
+    python -m pytest tests/ -v
+
+    # Check code formatting and style
+    black --check .
+    isort --check .
+    flake8 .
+    ```
+
+7.  **Submit a Pull Request**:
+    -   Push your branch to your fork and open a pull request.
+    -   Provide a clear description of your changes and reference any related issues.
+    -   Ensure all automated checks (CI) are passing.
 
 ## Development Guidelines
 
 ### Security First
-- All cryptographic operations must be reviewed
-- Memory management must be secure
-- Input validation is mandatory
-- Timing attacks must be considered
+-   **Input Validation is Mandatory**: Never trust external input.
+-   **Secure Memory Handling**: Use the provided utilities to clear sensitive data from memory after use.
+-   **Constant-Time Operations**: Use constant-time comparisons for cryptographic secrets to prevent timing attacks.
+-   **Review Cryptographic Code**: All changes to cryptographic functions require careful review.
 
 ### Code Quality
-- Minimum 80% test coverage
-- Type hints required
-- Docstrings for all public APIs
-- Error handling must be comprehensive
-
-### Performance
-- Profile memory usage
-- Benchmark cryptographic operations
-- Test on multiple platforms
-- Consider USB device variations
+-   **Test Coverage**: Aim to maintain or increase test coverage.
+-   **Type Hinting**: All new functions and methods should include type hints.
+-   **Docstrings**: Public APIs must have clear and comprehensive docstrings.
 
 ## Testing
 
-### Test Categories
-- **Unit Tests**: Core functionality
-- **Integration Tests**: USB device interaction
-- **Security Tests**: Cryptographic validation
-- **Performance Tests**: Benchmarking
+The project uses `pytest` for testing. Tests are located in the `tests/` directory.
 
 ### Running Tests
 ```bash
-# All tests
-python -m pytest tests/ -v --cov=dual_usb_backup
-
-# Security-specific tests
-python simple_test.py
-
-# Performance benchmarks
-python tests/benchmark.py
-```
-
-## Security Considerations
-
-### Sensitive Data Handling
-- Never log passphrases or keys
-- Use secure memory allocation
-- Clear sensitive data after use
-- Validate all inputs thoroughly
-
-### Cryptographic Standards
-- Use only well-established algorithms
-- Follow NIST recommendations
-- Consider post-quantum implications
-- Regular security audits
-
-## Documentation
-
-- Update README.md for user-facing changes
-- Add docstrings for new functions
-- Include usage examples
-- Document security considerations
-
-## Release Process
-
-1. Update version in `pyproject.toml`
-2. Update CHANGELOG.md
-3. Create release tag
-4. Build and upload to PyPI
-5. Create GitHub release
-
-Thank you for contributing to the security of digital assets!
+# Install test dependencies (included in the 'dev' extra)
+pip install -e ".[dev]"

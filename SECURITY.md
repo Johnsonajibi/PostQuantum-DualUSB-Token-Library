@@ -1,6 +1,10 @@
 # Security Policy
 
+We take the security of this project seriously. If you discover a security vulnerability, please follow these guidelines to report it responsibly.
+
 ## Supported Versions
+
+The following table shows which versions of the library are currently supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -8,129 +12,52 @@
 
 ## Reporting a Vulnerability
 
-We take security seriously. If you discover a security vulnerability, please follow these guidelines:
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-### 🚨 Critical Security Issues
+Instead, please send an email to the maintainer at **`Johnsonajibi@gmail.com`**.
 
-For critical security vulnerabilities that could compromise user data:
+Please include the following information in your report:
 
-1. **DO NOT** open a public GitHub issue
-2. **DO NOT** discuss the vulnerability publicly
-3. **DO** email the maintainer directly at: [security@yourproject.com]
-4. **DO** include detailed information about the vulnerability
+-   A descriptive title, e.g., `[SECURITY] Remote Code Execution in...`
+-   The version of the library you are using.
+-   A detailed description of the vulnerability.
+-   Step-by-step instructions on how to reproduce the issue.
+-   Any proof-of-concept code or scripts.
+-   The potential impact of the vulnerability.
 
-### 📧 Security Report Template
+### Response Timeline
 
-```
-Subject: [SECURITY] Brief description of vulnerability
+You can expect the following response timeline:
 
-**Vulnerability Type:** [e.g., cryptographic, memory safety, input validation]
-**Affected Component:** [e.g., encryption module, USB detection, CLI]
-**Severity:** [Critical/High/Medium/Low]
-**Attack Vector:** [Local/Network/Physical]
+-   **Initial Acknowledgment**: Within 48 hours.
+-   **Initial Assessment**: Within 1 week.
+-   **Progress Updates**: We will strive to provide updates every 7-14 days until a fix is released.
+-   **Public Disclosure**: We will coordinate with you to disclose the vulnerability publicly after a fix has been released.
 
-**Description:**
-[Detailed description of the vulnerability]
+## Security Measures in This Library
 
-**Steps to Reproduce:**
-1. [First step]
-2. [Second step]
-3. [etc.]
+This library is designed with a "secure-by-default" philosophy and incorporates several layers of defense.
 
-**Expected vs Actual Behavior:**
-[What should happen vs what actually happens]
+### Cryptographic Security
+-   **Hybrid Encryption**: Combines classical AES-256-GCM with post-quantum Kyber1024 to protect against both current and future threats.
+-   **Post-Quantum Signatures**: Uses NIST-standardized Dilithium3 for verifying the authenticity of audit logs and other critical data.
+-   **Strong Key Derivation**: Employs Argon2id, a memory-hard function, to stretch user passphrases and resist brute-force attacks.
+-   **Timing Attack Mitigation**: Uses constant-time comparison functions for cryptographic secrets.
 
-**Potential Impact:**
-[Data exposure, privilege escalation, denial of service, etc.]
+### System and Memory Security
+-   **Secure Memory Wiping**: Automatically zeroes out memory that held sensitive data (keys, plaintexts) to prevent data leakage from memory dumps or cold boot attacks.
+-   **Atomic File Operations**: Uses atomic writes to prevent data corruption or partial writes in case of an unexpected shutdown.
+-   **Input Validation**: All inputs, especially file paths and passphrases, are strictly validated to prevent vulnerabilities like path traversal.
+-   **Device Validation**: The library includes functions to ensure that backups are being written to distinct, removable physical devices, preventing accidental overwrites.
 
-**Suggested Fix:**
-[If you have ideas for remediation]
+### Audit and Tamper-Evidence
+-   **Secure Logging**: All critical security events are logged to a local, append-only file.
+-   **HMAC Chaining**: Each log entry is chained to the previous one with an HMAC, making it computationally infeasible to tamper with the log without detection.
 
-**Environment:**
-- OS: [Windows/Linux/macOS]
-- Python version: [3.8, 3.9, etc.]
-- Library version: [0.1.0]
-- Hardware: [USB drive types, etc.]
-```
+## Security Testing
 
-### ⏱️ Response Timeline
+-   **Unit and Integration Tests**: The test suite includes specific tests for cryptographic correctness, exception handling on invalid inputs, and proper memory cleanup.
+-   **Static Analysis**: The codebase is regularly scanned with tools like `flake8` and `mypy` to catch potential issues early.
+-   **Code Review**: All contributions, especially those touching security-sensitive code, undergo a manual security review.
 
-- **Acknowledgment:** Within 24 hours
-- **Initial Assessment:** Within 72 hours  
-- **Progress Updates:** Weekly until resolved
-- **Fix Release:** Target 30 days for critical issues
-
-### 🛡️ Security Measures
-
-This library implements multiple security layers:
-
-#### Cryptographic Security
-- **AES-256-GCM**: Authenticated encryption with associated data
-- **Argon2id**: Memory-hard key derivation function
-- **HMAC-SHA256**: Message authentication codes
-- **Dilithium**: Post-quantum digital signatures
-- **Constant-time operations**: Timing attack protection
-
-#### Memory Security
-- **Secure allocation**: Memory locking (VirtualLock/mlock)
-- **Automatic clearing**: Sensitive data wiped after use
-- **Stack protection**: Compiler flags enabled
-- **Heap protection**: Modern allocator features
-
-#### Input Validation
-- **Path sanitization**: Prevents directory traversal
-- **Type checking**: Runtime type validation
-- **Bounds checking**: Buffer overflow protection
-- **Format validation**: Structured data validation
-
-#### Physical Security
-- **Dual USB requirement**: No single point of failure
-- **Device binding**: Hardware fingerprinting
-- **Tamper evidence**: Audit log integrity
-- **Access controls**: Permission validation
-
-### 🔍 Security Testing
-
-We employ multiple testing methodologies:
-
-- **Static analysis**: Code scanning with security rules
-- **Dynamic testing**: Runtime security validation
-- **Fuzzing**: Input validation testing
-- **Penetration testing**: Simulated attack scenarios
-- **Code review**: Manual security assessment
-
-### 📋 Security Checklist for Contributors
-
-Before submitting security-related changes:
-
-- [ ] **Cryptographic review**: All crypto operations validated
-- [ ] **Memory safety**: No leaks or unsafe operations
-- [ ] **Input validation**: All inputs properly sanitized
-- [ ] **Error handling**: Secure failure modes
-- [ ] **Testing**: Security test cases included
-- [ ] **Documentation**: Security implications documented
-
-### 🚀 Security Updates
-
-Security updates are prioritized and released as patch versions:
-
-- **Critical**: Immediate patch release
-- **High**: Within 1 week
-- **Medium**: Next minor release
-- **Low**: Next major release
-
-### 🏆 Recognition
-
-We appreciate security researchers who help improve our project:
-
-- **Hall of Fame**: Recognition in project documentation
-- **Coordination**: Responsible disclosure timeline
-- **Credit**: Attribution in security advisories (if desired)
-
-### 📚 Security Resources
-
-- [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
-- [NIST Post-Quantum Cryptography](https://csrc.nist.gov/Projects/post-quantum-cryptography)
-- [Python Security Best Practices](https://python.org/dev/security/)
-
-Thank you for helping keep PostQuantum DualUSB Token Library secure!
+Thank you for helping to keep the PQC Dual USB Library secure.
