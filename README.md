@@ -338,9 +338,181 @@ graph TB
     style PQC fill:#fff9c4
 ```
 
-### 3. Data Flow Sequence Diagrams
+### 3. High-Level Logic Flowcharts
 
-#### 3.1. `init_dual_usb` Data Flow
+#### 3.1. Initialization Flow (`init_dual_usb`)
+
+This flowchart shows the complete logic flow when initializing a dual USB backup system, including all validation and error handling.
+
+```mermaid
+flowchart TD
+    Start([Start: init_dual_usb]) --> ValidatePaths{Validate USB paths}
+    ValidatePaths -->|Invalid| Error1[Raise ValueError]
+    ValidatePaths -->|Valid| CheckRemovable{Are both drives removable?}
+    
+    CheckRemovable -->|No| Error2[Raise RuntimeError]
+    CheckRemovable -->|Yes| CheckDistinct{Are drives distinct?}
+    
+    CheckDistinct -->|No| Error3[Raise ValueError: Same device]
+    CheckDistinct -->|Yes| CreateBackupDir[Create .system_backup/ on backup drive]
+    
+    CreateBackupDir --> DeriveKey[Derive encryption key from passphrase using Argon2id]
+    DeriveKey --> GenPQCKeys{PQC enabled?}
+    
+    GenPQCKeys -->|Yes| GenerateKEM[Generate Kyber keypair]
+    GenPQCKeys -->|No| EncryptToken[Encrypt token with AES-256-GCM]
+    GenerateKEM --> HybridEncrypt[Hybrid encrypt: AES + PQC]
+    
+    HybridEncrypt --> WriteBackup[Atomic write backup file to backup drive]
+    EncryptToken --> WriteBackup
+    
+    WriteBackup --> WriteToken[Atomic write plaintext token to primary drive]
+    WriteToken --> CreateState[Create state.json with rotation=0]
+    CreateState --> AuditLog[Log initialization event]
+    AuditLog --> Success([Return: paths and rotation info])
+    
+    Error1 --> End([End with Exception])
+    Error2 --> End
+    Error3 --> End
+    
+    style Start fill:#e1f5ff
+    style Success fill:#c8e6c9
+    style Error1 fill:#ffcdd2
+    style Error2 fill:#ffcdd2
+    style Error3 fill:#ffcdd2
+```
+
+#### 3.2. Token Rotation Flow (`rotate_token`)
+
+This flowchart illustrates the complete logic for rotating a token, including state verification and cleanup.
+
+```mermaid
+flowchart TD
+    Start([Start: rotate_token]) --> ReadState[Read state.json from primary drive]
+    ReadState --> VerifyRotation{prev_rotation matches current?}
+    
+    VerifyRotation -->|No| Error1[Raise ValueError: Rotation mismatch]
+    VerifyRotation -->|Yes| IncrementRotation[rotation = current + 1]
+    
+    IncrementRotation --> DeriveKey[Derive key from passphrase]
+    DeriveKey --> EncryptNew[Encrypt new token]
+    EncryptNew --> WriteNewBackup[Atomic write new backup file]
+    
+    WriteNewBackup --> WriteNewToken[Atomic write new token to primary]
+    WriteNewToken --> UpdateState[Update state.json with new rotation]
+    UpdateState --> CleanupOld{Cleanup enabled?}
+    
+    CleanupOld -->|Yes| DeleteOldToken[Delete old token file]
+    CleanupOld -->|No| AuditLog[Log rotation event]
+    DeleteOldToken --> DeleteOldBackup[Delete old backup file]
+    DeleteOldBackup --> AuditLog
+    
+    AuditLog --> Success([Return: new rotation and paths])
+    Error1 --> End([End with Exception])
+    
+    style Start fill:#e1f5ff
+    style Success fill:#c8e6c9
+    style Error1 fill:#ffcdd2
+```
+
+#### 3.3. Backup Verification Flow
+
+This shows the logic for verifying that a backup file can be decrypted and matches the expected token.
+
+```mermaid
+flowchart TD
+    Start([Start: verify_backup]) --> ReadBackup[Read encrypted backup file]
+    ReadBackup --> ParseMeta[Parse metadata: salt, nonce, PQC keys]
+    ParseMeta --> DeriveKey[Derive key from passphrase + salt]
+    
+    DeriveKey --> HasPQC{Backup has PQC data?}
+    HasPQC -->|Yes| DecapKEM[Decapsulate Kyber ciphertext]
+    HasPQC -->|No| Decrypt[Decrypt with AES-256-GCM]
+    
+    DecapKEM --> CombineKeys[Combine classical + PQC keys]
+    CombineKeys --> Decrypt
+    
+    Decrypt --> DecryptSuccess{Decryption successful?}
+    DecryptSuccess -->|No| Error1[Raise InvalidTag: Wrong passphrase]
+    DecryptSuccess -->|Yes| Compare{Compare with expected token}
+    
+    Compare -->|Match| Success([Return: True])
+    Compare -->|No match| Failure([Return: False])
+    Error1 --> End([End with Exception])
+    
+    style Start fill:#e1f5ff
+    style Success fill:#c8e6c9
+    style Failure fill:#fff9c4
+    style Error1 fill:#ffcdd2
+```
+
+#### 3.4. Restore Operation Flow
+
+Complete logic for restoring from a backup file to a new primary drive.
+
+```mermaid
+flowchart TD
+    Start([Start: restore_from_backup]) --> ValidatePath{Validate restore path}
+    ValidatePath -->|Invalid| Error1[Raise ValueError]
+    ValidatePath -->|Valid| ReadBackup[Read backup file]
+    
+    ReadBackup --> DeriveKey[Derive key from passphrase]
+    DeriveKey --> Decrypt[Decrypt backup]
+    Decrypt --> DecryptSuccess{Success?}
+    
+    DecryptSuccess -->|No| Error2[Raise InvalidTag]
+    DecryptSuccess -->|Yes| ExtractToken[Extract decrypted token]
+    
+    ExtractToken --> ExtractMeta[Extract rotation number from metadata]
+    ExtractMeta --> WriteToken[Atomic write token to restore path]
+    WriteToken --> CreateState[Create new state.json]
+    CreateState --> AuditLog[Log restore event]
+    AuditLog --> Success([Return: token path and rotation])
+    
+    Error1 --> End([End with Exception])
+    Error2 --> End
+    
+    style Start fill:#e1f5ff
+    style Success fill:#c8e6c9
+    style Error1 fill:#ffcdd2
+    style Error2 fill:#ffcdd2
+```
+
+#### 3.5. PQC Backend Selection Logic
+
+This shows how the library selects the appropriate Post-Quantum Cryptography backend at runtime.
+
+```mermaid
+flowchart TD
+    Start([PQC Module Import]) --> CheckRust{Rust PQC available?}
+    CheckRust -->|Yes| TestRust[Test Rust backend]
+    CheckRust -->|No| CheckOQS{python-oqs available?}
+    
+    TestRust --> RustWorks{Test successful?}
+    RustWorks -->|Yes| UseRust[Set backend = 'rust_pqc']
+    RustWorks -->|No| CheckOQS
+    
+    CheckOQS -->|Yes| TestOQS[Test OQS backend]
+    CheckOQS -->|No| Error[Raise RuntimeError: No PQC backend]
+    
+    TestOQS --> OQSWorks{Test successful?}
+    OQSWorks -->|Yes| UseOQS[Set backend = 'oqs']
+    OQSWorks -->|No| Error
+    
+    UseRust --> Ready([PQC Ready])
+    UseOQS --> Ready
+    Error --> End([Cannot use PQC features])
+    
+    style Start fill:#e1f5ff
+    style Ready fill:#c8e6c9
+    style UseRust fill:#c8e6c9
+    style UseOQS fill:#fff9c4
+    style Error fill:#ffcdd2
+```
+
+### 4. Data Flow Sequence Diagrams
+
+#### 4.1. `init_dual_usb` Data Flow
 
 This diagram shows the sequence of events when initializing the dual USB setup for the first time.
 
@@ -376,7 +548,7 @@ sequenceDiagram
     Storage-->>-App: {primary_token, backup_file, rotation: 0}
 ```
 
-#### 3.2. `rotate_token` Data Flow
+#### 4.2. `rotate_token` Data Flow
 
 This diagram illustrates the process of updating the secret token, which involves creating a new backup and then updating the primary drive.
 
@@ -412,7 +584,7 @@ sequenceDiagram
     Storage-->>-App: {rotation: 1, backup: new_backup_path}
 ```
 
-### 4. Cryptographic Pipeline
+### 5. Cryptographic Pipeline
 
 The library uses a hybrid cryptographic model, combining classical authenticated encryption (AES-GCM) with post-quantum key encapsulation (Kyber) to derive the final encryption key.
 
@@ -443,7 +615,7 @@ graph TD
     style M fill:#fff3cd
 ```
 
-### 5. File System Layout
+### 6. File System Layout
 
 The library creates a specific file and directory structure on the primary and backup USB drives to maintain state and store cryptographic materials securely.
 
@@ -470,7 +642,7 @@ graph TB
     style Host fill:#fff3e0
 ```
 
-### 6. Security Threat Model & Mitigations
+### 7. Security Threat Model & Mitigations
 
 The security of the library is built on a defense-in-depth strategy, mapping specific threats to concrete mitigation techniques implemented in the code.
 
