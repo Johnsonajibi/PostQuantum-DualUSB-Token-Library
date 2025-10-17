@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Comprehensive architectural diagrams to `README.md` using Mermaid.js.
+- Detailed "Threat Model and Security Guarantees" section to `README.md`.
+- Project "Roadmap" section to `README.md`.
+
+### Changed
+- **BREAKING CHANGE**: Completely restructured and consolidated `README.md` for clarity and accuracy. Removed significant duplicated content.
+- Synchronized `PYPI_README.md` with the new, streamlined `README.md` content.
+- Moved badges to the top of `README.md`.
+
 ## [0.1.0] - 2025-08-30
 
 ### Added
