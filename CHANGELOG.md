@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-10-18
+
+### Changed
+- Simplified `setup.py` to use all configuration from `pyproject.toml` (modern Python packaging best practice).
+- Updated package metadata: author email, GitHub URLs to correct repository.
+- Updated license format in `pyproject.toml` to comply with modern packaging standards.
+
+### Added
+- **Comprehensive architectural diagrams** using Mermaid:
+  - High-level system architecture diagram
+  - Component architecture with module relationships
+  - Data flow sequence diagrams for all operations
+  - Cryptographic pipeline visualization
+  - File system layout diagram
+  - Security threat model diagram
+  - Detailed flowcharts for init, rotate, verify, restore, and PQC backend selection
+- Enhanced documentation with visual guides in `README.md` and `ARCHITECTURE.md`.
+
+### Fixed
+- Corrected Mermaid diagram syntax errors (simplified nested subgraphs, fixed direction declarations).
+- Improved diagram readability with better color contrast (dark text on light backgrounds).
+- Fixed PyPI build configuration to remove deprecated license classifier format.
+- Updated all documentation to reflect the current modular architecture (removed references to old `BackupManager` class).
+
+## [0.1.1] - 2025-09-15
+
 ### Changed
 - **BREAKING CHANGE**: Refactored the entire project from a single script into a modular, installable Python package named `pqcdualusb`.
 - Replaced the high-level `BackupManager` class with a functional API (`init_dual_usb`, `rotate_token`, etc.) for more granular control.
@@ -42,5 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive audit logging** with tamper-evident chains.
 - **Interactive CLI** with smart drive selection.
 
-[Unreleased]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/releases/tag/v0.1.0
