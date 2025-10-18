@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-10-18
+
+### Fixed
+- Fixed PyPI README display by using `PYPI_README.md` instead of `README.md` (PyPI doesn't support Mermaid diagrams).
+- PyPI package page now shows properly formatted documentation without broken diagram syntax.
+
+### Note
+- The full documentation with interactive Mermaid diagrams is still available on [GitHub](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library).
+
 ## [0.1.2] - 2025-10-18
 
 ### Changed
@@ -68,7 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive audit logging** with tamper-evident chains.
 - **Interactive CLI** with smart drive selection.
 
-[Unreleased]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/releases/tag/v0.1.0

@@ -9,9 +9,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pqcdualusb"
-version = "0.1.2"
+version = "0.1.3"
 description = "Post-Quantum Cryptography Dual USB Token Library for secure backup operations"
-readme = "README.md"
+readme = "PYPI_README.md"
 license = "MIT"
 authors = [
     { name = "Johnson Ajibi", email = "Johnsonajibi@gmail.com" }
