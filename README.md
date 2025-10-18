@@ -11,9 +11,9 @@
 
 A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 
-> **📚 This is a library package** designed to be imported into your applications. It provides a set of functions to manage secure backups.
+> **NOTE:** This is a library package designed to be imported into your applications. It provides a set of functions to manage secure backups.
 
-## 📋 Overview
+## Overview
 
 The **PQC Dual USB Library** provides a robust, enterprise-grade solution for securing data against threats from both classical and quantum computers. It offers a functional API for developers to integrate post-quantum cryptography (PQC) into applications requiring secure data storage, especially for scenarios involving redundant backups on physical devices like USB drives.
 
@@ -32,7 +32,7 @@ from pqcdualusb.pqc import pq_write_audit_keys
 # See the Quick Start Guide below for a detailed example.
 ```
 
-## 🏛️ Architectural Vision
+## Architectural Vision
 
 The core architecture is designed to be modular, extensible, and secure. It abstracts the complexity of cryptographic backends and hardware interactions, providing a clean and simple functional API to the application layer.
 
@@ -63,7 +63,7 @@ graph TD
     E --> G;
 ```
 
-## 🌟 Key Features
+## Key Features
 
 ### Cryptographic Security
 - **Post-Quantum Cryptography**: NIST-standardized Kyber1024 (KEM) and Dilithium3 (signatures).
@@ -77,7 +77,7 @@ graph TD
 - **Secure Memory Management**: Automatically zeroes out memory that held sensitive data (keys, plaintexts) to prevent data leakage.
 - **Timing Attack Mitigation**: Employs constant-time comparison operations where possible to prevent attackers from inferring secret data through timing variations.
 
-## 🛡️ Threat Model and Security Guarantees
+## ️ Threat Model and Security Guarantees
 
 This library is designed to protect against a range of threats, from common software vulnerabilities to sophisticated nation-state-level attacks.
 
@@ -92,7 +92,7 @@ This library is designed to protect against a range of threats, from common soft
 ### Limitations
 - This library cannot protect against keyloggers, screen-capture malware, or other compromises of the host operating system. The security of the overall system depends on the security of the environment in which it runs.
 
-## 🗺️ Roadmap
+## ️ Roadmap
 
 This project is under active development. Our goals for the near future include:
 
@@ -110,7 +110,7 @@ This project is under active development. Our goals for the near future include:
 - **[Performance] SIMD-Optimized Backends**:
     - Integrate official PQC implementations that use AVX2/NEON instructions for significant performance gains on supported platforms.
 
-## 📦 Installation
+## Installation
 
 ### 1. Standard Installation
 ```bash
@@ -146,7 +146,7 @@ If the Rust backend is not available, the library will fall back to `python-oqs`
 pip install oqs
 ```
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 This example demonstrates the end-to-end process of creating and managing a secure dual USB backup using the library's functions.
 
@@ -194,7 +194,7 @@ init_info = init_dual_usb(
     backup_mount=backup_path,
     passphrase=passphrase
 )
-print("✅ Initialization complete.")
+print(" Initialization complete.")
 print(f"   - Primary token written to: {init_info['primary_token']}")
 print(f"   - Encrypted backup written to: {init_info['backup_file']}")
 
@@ -203,7 +203,7 @@ print(f"   - Encrypted backup written to: {init_info['backup_file']}")
 print("\nStep 2: Verifying the backup file...")
 is_valid = verify_backup(Path(init_info['backup_file']), passphrase, initial_secret)
 assert is_valid
-print("✅ Backup integrity verified successfully.")
+print(" Backup integrity verified successfully.")
 
 
 # 3. Rotate the Token with a New Secret
@@ -217,7 +217,7 @@ rotate_info = rotate_token(
     passphrase=passphrase,
     prev_rotation=0
 )
-print("✅ Token rotation complete.")
+print(" Token rotation complete.")
 print(f"   - New rotation counter: {rotate_info['rotation']}")
 
 
@@ -233,7 +233,7 @@ is_setup_valid = verify_dual_setup(
     enforce_rotation=True
 )
 assert is_setup_valid
-print("✅ Dual USB setup is consistent and valid.")
+print(" Dual USB setup is consistent and valid.")
 
 
 # 5. Restore from the Latest Backup
@@ -248,7 +248,7 @@ restored_token_path, _ = restore_from_backup(
 # Check that the restored data matches the new secret
 restored_data = restored_token_path.read_bytes()
 assert restored_data == new_secret
-print("✅ Restore successful. Restored data matches the new secret.")
+print(" Restore successful. Restored data matches the new secret.")
 
 
 # --- Cleanup ---
@@ -257,7 +257,7 @@ print("\nCleanup complete.")
 
 ```
 
-## 🏛️ Detailed Architecture
+## ️ Detailed Architecture
 
 This section provides a deep dive into the library's internal design, data flows, and security model.
 
@@ -670,7 +670,7 @@ graph TB
     style T6 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
-## 🧪 Testing
+## Testing
 
 The library includes a comprehensive test suite to ensure correctness and security.
 
@@ -686,7 +686,7 @@ python -m pytest tests/ -v
 python -m pytest tests/ --cov=pqcdualusb --cov-report=html
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please follow the standard fork-and-pull-request workflow.
 
@@ -703,6 +703,6 @@ Contributions are welcome! Please follow the standard fork-and-pull-request work
 
 The pre-commit hooks will automatically enforce the code style.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

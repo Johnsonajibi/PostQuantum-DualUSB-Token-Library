@@ -7,11 +7,11 @@
 
 A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 
-> **📚 This is a library package** designed to be imported into your applications. It provides a set of functions to manage secure backups. For the full documentation with interactive diagrams, architecture details, and contribution guidelines, please visit the [GitHub Repository](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library).
+> **NOTE:** This is a library package** designed to be imported into your applications. It provides a set of functions to manage secure backups. For the full documentation with interactive diagrams, architecture details, and contribution guidelines, please visit the [GitHub Repository](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library).
 
 ---
 
-## 📋 Overview
+## Overview
 
 The **PQC Dual USB Library** provides a robust, enterprise-grade solution for securing data against threats from both classical and quantum computers. It offers a functional API for developers to integrate post-quantum cryptography (PQC) into applications requiring secure data storage, especially for scenarios involving redundant backups on physical devices like USB drives.
 
@@ -19,7 +19,7 @@ The library is designed with a "secure-by-default" philosophy, automatically han
 
 ---
 
-## 🏗️ Architecture Overview
+## ️ Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -52,25 +52,25 @@ The library is designed with a "secure-by-default" philosophy, automatically han
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
-### 🔐 Post-Quantum Security
+### Post-Quantum Security
 -   **NIST-standardized algorithms**: Kyber1024 (KEM) and Dilithium3 (signatures)
 -   **Hybrid encryption**: Combines classical AES-256-GCM with post-quantum KEMs
 -   **Future-proof**: Protection against both classical and quantum computer attacks
 
-### 💾 Dual USB Architecture
+### Dual USB Architecture
 -   **Split secret design**: Data is secured across two physical USB devices
 -   **Redundant storage**: Automatic synchronization between primary and backup drives
 -   **Atomic operations**: Ensures data integrity even during power failures
 
-### 🛡️ Security Features
+### ️ Security Features
 -   **Secure memory**: Automatic wiping of sensitive data from RAM
 -   **Side-channel resistance**: Constant-time operations to prevent timing attacks
 -   **Strong KDF**: Argon2id protects passphrases against brute-force attacks
 -   **Tamper-evident logging**: Comprehensive audit trail of all security events
 
-### 🚀 Developer-Friendly
+### Developer-Friendly
 -   **Simple API**: Clean, functional interface with minimal boilerplate
 -   **Type hints**: Full type annotations for better IDE support
 -   **Comprehensive tests**: Extensive test suite ensures reliability
@@ -78,7 +78,7 @@ The library is designed with a "secure-by-default" philosophy, automatically han
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
 pip install pqcdualusb
@@ -99,7 +99,7 @@ For advanced users who need maximum performance. See the [GitHub README](https:/
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 This example demonstrates the end-to-end process of creating and managing a secure dual USB backup using the library's functions.
 
@@ -125,7 +125,7 @@ init_info = init_dual_usb(
     backup_mount=backup_usb,
     passphrase=passphrase
 )
-print(f"✅ Initialized: {init_info['primary']}, {init_info['backup']}")
+print(f" Initialized: {init_info['primary']}, {init_info['backup']}")
 
 # 2. Verify the backup integrity
 is_valid = verify_dual_setup(
@@ -133,7 +133,7 @@ is_valid = verify_dual_setup(
     backup_mount=backup_usb,
     passphrase=passphrase
 )
-print(f"✅ Backup verified: {is_valid}")
+print(f" Backup verified: {is_valid}")
 
 # 3. Rotate the secret (e.g., periodic key rotation)
 new_secret = b"my-new-rotated-master-key"
@@ -144,7 +144,7 @@ rotate_info = rotate_token(
     passphrase=passphrase,
     prev_rotation=0  # Increment on each rotation
 )
-print(f"✅ Token rotated to rotation #{rotate_info['rotation']}")
+print(f" Token rotated to rotation #{rotate_info['rotation']}")
 
 # 4. Restore from backup (disaster recovery)
 restore_path = Path("/media/usb_restore")
@@ -153,7 +153,7 @@ restored_token, _ = restore_from_backup(
     restore_primary=restore_path,
     passphrase=passphrase
 )
-print(f"✅ Restored to: {restored_token}")
+print(f" Restored to: {restored_token}")
 ```
 
 ### Complete Example with Error Handling
@@ -182,7 +182,7 @@ backup_path = tmp_dir / "BACKUP"
 primary_path.mkdir()
 backup_path.mkdir()
 
-print(f"🔧 Simulating USB drives:\n   Primary: {primary_path}\n   Backup:  {backup_path}\n")
+print(f" Simulating USB drives:\n   Primary: {primary_path}\n   Backup:  {backup_path}\n")
 
 # --- Core Variables ---
 passphrase = "a-very-strong-and-unique-passphrase"
@@ -197,7 +197,7 @@ try:
         backup_mount=backup_path,
         passphrase=passphrase
     )
-    print(f"✅ Initialization complete.")
+    print(f" Initialization complete.")
     print(f"   Primary: {init_info['primary']}")
     print(f"   Backup:  {init_info['backup']}\n")
 
@@ -209,7 +209,7 @@ try:
         initial_secret
     )
     if is_valid:
-        print("✅ Backup integrity verified successfully.\n")
+        print(" Backup integrity verified successfully.\n")
     else:
         raise BackupVerificationError("Backup verification failed!")
 
@@ -223,7 +223,7 @@ try:
         passphrase=passphrase,
         prev_rotation=0
     )
-    print(f"✅ Token rotation complete.")
+    print(f" Token rotation complete.")
     print(f"   Rotation number: {rotate_info['rotation']}")
     print(f"   New backup: {rotate_info['backup']}\n")
 
@@ -241,27 +241,27 @@ try:
     # Verify that the restored data matches the new secret
     restored_data = restored_token_path.read_bytes()
     assert restored_data == new_secret, "Restored data doesn't match!"
-    print(f"✅ Restore successful!")
+    print(f" Restore successful!")
     print(f"   Restored to: {restored_token_path}")
     print(f"   Data verified: {len(restored_data)} bytes match.\n")
 
 except PassphraseMismatchError:
-    print("❌ Error: Incorrect passphrase provided.")
+    print(" Error: Incorrect passphrase provided.")
 except BackupVerificationError as e:
-    print(f"❌ Error: Backup verification failed - {e}")
+    print(f" Error: Backup verification failed - {e}")
 except DeviceNotFoundError as e:
-    print(f"❌ Error: USB device not found - {e}")
+    print(f" Error: USB device not found - {e}")
 except Exception as e:
-    print(f"❌ Unexpected error: {e}")
+    print(f" Unexpected error: {e}")
 finally:
     # --- Cleanup ---
     shutil.rmtree(tmp_dir)
-    print("🧹 Cleanup complete.")
+    print(" Cleanup complete.")
 ```
 
 ---
 
-## 🔒 Security Properties
+## Security Properties
 
 ### Cryptographic Stack
 
@@ -311,7 +311,7 @@ User Passphrase
 
 ---
 
-## 📚 API Reference
+## API Reference
 
 ### Core Functions
 
@@ -366,7 +366,7 @@ Restore data from a backup file.
 
 ---
 
-## 🎯 Use Cases
+## Use Cases
 
 ### 1. **Cryptocurrency Wallet Protection**
 Securely store master private keys across two USB devices with quantum-resistant encryption.
@@ -385,7 +385,7 @@ Create offline backups of HSM keys with tamper-evident logging.
 
 ---
 
-## 🔧 Advanced Configuration
+## Advanced Configuration
 
 ### Custom Argon2id Parameters
 
@@ -413,7 +413,7 @@ secure_wipe(sensitive_data)  # Automatically wipes on deletion
 
 ---
 
-## 📖 Documentation
+## Documentation
 
 For comprehensive documentation including:
 - **Architecture diagrams** (interactive Mermaid diagrams on GitHub)
@@ -426,13 +426,13 @@ Visit the [GitHub Repository](https://github.com/Johnsonajibi/PostQuantum-DualUS
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please see the [CONTRIBUTING.md](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/blob/master/CONTRIBUTING.md) file for guidelines.
 
 ---
 
-## 🔐 Security
+## Security
 
 For security vulnerabilities, please email **Johnsonajibi@gmail.com** instead of using the issue tracker.
 
@@ -440,13 +440,13 @@ See [SECURITY.md](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Libr
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/blob/master/LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **NIST** for standardizing post-quantum cryptography algorithms
 - **Open Quantum Safe (OQS)** project for the `liboqs` library
@@ -454,7 +454,7 @@ This project is licensed under the MIT License. See the [LICENSE](https://github
 
 ---
 
-## 📞 Support
+## Support
 
 - **Documentation**: [GitHub Repository](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library)
 - **Issues**: [GitHub Issues](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/issues)
