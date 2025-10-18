@@ -288,11 +288,11 @@ graph TB
     Storage --> Primary[Primary USB Drive]
     Backup --> BackupDrive[Backup USB Drive]
     
-    style App fill:#e1f5ff
-    style Storage fill:#c8e6c9
-    style Backup fill:#c8e6c9
-    style Crypto fill:#fff9c4
-    style PQC fill:#fff9c4
+    style App fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Storage fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Backup fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Crypto fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+    style PQC fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
 ```
 
 ### 2. Detailed Component (Module) Architecture
@@ -332,10 +332,10 @@ graph TB
     PQC --> Rust
     PQC --> OQS
     
-    style Storage fill:#c8e6c9
-    style Backup fill:#c8e6c9
-    style Crypto fill:#fff9c4
-    style PQC fill:#fff9c4
+    style Storage fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Backup fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Crypto fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+    style PQC fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
 ```
 
 ### 3. High-Level Logic Flowcharts
@@ -375,11 +375,11 @@ flowchart TD
     Error2 --> End
     Error3 --> End
     
-    style Start fill:#e1f5ff
-    style Success fill:#c8e6c9
-    style Error1 fill:#ffcdd2
-    style Error2 fill:#ffcdd2
-    style Error3 fill:#ffcdd2
+    style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Success fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Error1 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style Error2 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style Error3 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 #### 3.2. Token Rotation Flow (`rotate_token`)
@@ -410,9 +410,9 @@ flowchart TD
     AuditLog --> Success([Return: new rotation and paths])
     Error1 --> End([End with Exception])
     
-    style Start fill:#e1f5ff
-    style Success fill:#c8e6c9
-    style Error1 fill:#ffcdd2
+    style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Success fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Error1 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 #### 3.3. Backup Verification Flow
@@ -440,10 +440,10 @@ flowchart TD
     Compare -->|No match| Failure([Return: False])
     Error1 --> End([End with Exception])
     
-    style Start fill:#e1f5ff
-    style Success fill:#c8e6c9
-    style Failure fill:#fff9c4
-    style Error1 fill:#ffcdd2
+    style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Success fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Failure fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+    style Error1 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 #### 3.4. Restore Operation Flow
@@ -472,10 +472,10 @@ flowchart TD
     Error1 --> End([End with Exception])
     Error2 --> End
     
-    style Start fill:#e1f5ff
-    style Success fill:#c8e6c9
-    style Error1 fill:#ffcdd2
-    style Error2 fill:#ffcdd2
+    style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Success fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style Error1 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style Error2 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 #### 3.5. PQC Backend Selection Logic
@@ -503,11 +503,11 @@ flowchart TD
     UseOQS --> Ready
     Error --> End([Cannot use PQC features])
     
-    style Start fill:#e1f5ff
-    style Ready fill:#c8e6c9
-    style UseRust fill:#c8e6c9
-    style UseOQS fill:#fff9c4
-    style Error fill:#ffcdd2
+    style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Ready fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style UseRust fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style UseOQS fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+    style Error fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 ### 4. Data Flow Sequence Diagrams
@@ -611,8 +611,8 @@ graph TD
     K --> P
     G --> P
     
-    style P fill:#d4edda
-    style M fill:#fff3cd
+    style P fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style M fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
 ```
 
 ### 6. File System Layout
@@ -637,9 +637,9 @@ graph TB
         H2[pqcdualusb_audit.log]
     end
     
-    style Primary fill:#e3f2fd
-    style Backup fill:#f3e5f5
-    style Host fill:#fff3e0
+    style Primary fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Backup fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
+    style Host fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
 ```
 
 ### 7. Security Threat Model & Mitigations
@@ -655,19 +655,19 @@ graph TB
     T5[Data Corruption] --> M5[Atomic writes: Temp file + move]
     T6[Memory Forensics] --> M6[SecureMemory: Auto-zeroing sensitive data]
     
-    style M1 fill:#c8e6c9
-    style M2 fill:#c8e6c9
-    style M3 fill:#c8e6c9
-    style M4 fill:#c8e6c9
-    style M5 fill:#c8e6c9
-    style M6 fill:#c8e6c9
+    style M1 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style M2 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style M3 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style M4 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style M5 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style M6 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     
-    style T1 fill:#ffcdd2
-    style T2 fill:#ffcdd2
-    style T3 fill:#ffcdd2
-    style T4 fill:#ffcdd2
-    style T5 fill:#ffcdd2
-    style T6 fill:#ffcdd2
+    style T1 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style T2 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style T3 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style T4 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style T5 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style T6 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 ## 🧪 Testing
