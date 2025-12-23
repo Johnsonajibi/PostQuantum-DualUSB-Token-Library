@@ -745,7 +745,7 @@ class PostQuantumCrypto:
         """
         def _decapsulate():
             if self.backend == PqcBackend.PQCRYPTO:
-                return self.pqcrypto_kem.decrypt(secret_key, ciphertext)
+                return self.pqcrypto_kem.decrypt(ciphertext, secret_key)
 
             if self.backend == PqcBackend.CPP:
                 return self.cpp_pqc.kem_decapsulate(secret_key, ciphertext)
