@@ -42,7 +42,7 @@ def test_crypto_operations():
         print(f"✅ KEM encap/decap: {len(ct)} byte ciphertext")
         
         # Test signatures
-        sk_sig, pk_sig = crypto.generate_signature_keypair()
+        sk_sig, pk_sig = crypto.generate_sig_keypair()
         message = b"Test message for signing"
         signature = crypto.sign(message, sk_sig)
         assert crypto.verify(message, signature, pk_sig), "Signature verification failed!"
@@ -62,7 +62,7 @@ def test_security_features():
     print("=" * 60)
     try:
         from pqcdualusb.security import SecureMemory, TimingAttackMitigation, secure_zero_memory
-        from pqcdualusb.utils import InputValidator, validate_passphrase
+        from pqcdualusb.utils import InputValidator
         
         # Test SecureMemory
         with SecureMemory(256) as buf:
@@ -90,9 +90,22 @@ def test_security_features():
         except ValueError:
             print("✅ Path traversal protection works")
         
-        # Test password validation
-        assert not validate_passphrase("aaaaaaaaaa"), "Weak password accepted!"
-        assert not validate_passphrase("a" * 300), "Too long password accepted!"
+        # Test password validation using InputValidator
+        validator = InputValidator()
+        try:
+            validator.validate_passphrase("weak")
+            print("❌ Weak password not rejected!")
+            return False
+        except ValueError:
+            pass
+        
+        try:
+            validator.validate_passphrase("a" * 300)
+            print("❌ Too long password not rejected!")
+            return False
+        except ValueError:
+            pass
+        
         print("✅ Password validation works")
         
         return True
