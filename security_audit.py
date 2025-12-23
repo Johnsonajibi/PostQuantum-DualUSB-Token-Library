@@ -202,10 +202,10 @@ def test_input_validation():
         # Weak passwords should fail
         weak_passwords = ["123", "password", "", "a" * 20, "a" * 250]  # Too short, common, empty, repeated chars, too long
         
-        for weak in weak_passwords:
+        for idx, weak in enumerate(weak_passwords):
             try:
                 InputValidator.validate_passphrase(weak)
-                print(f"⚠️  Weak password not rejected: '{weak[:20]}...'")
+                print(f"⚠️  Weak password not rejected (index={idx}, length={len(weak)})")
                 return False
             except ValueError:
                 pass  # Expected to fail
