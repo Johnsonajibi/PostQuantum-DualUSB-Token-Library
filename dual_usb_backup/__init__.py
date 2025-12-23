@@ -1,7 +1,10 @@
-from .dual_usb_backup import (
-	list_removable_drives,
-	select_dual_usb,
-	backup_token,
-	backup_vault_files,
-	dual_usb_backup_workflow
-)
+"""
+Dual USB Backup Package
+
+This package provides configuration and exception handling for dual USB backup operations.
+"""
+
+from .config import *
+from .exceptions import *
+
+__all__ = ['config', 'exceptions']

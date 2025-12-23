@@ -59,9 +59,6 @@ class SecureMemory:
     def _lock_memory_windows(self):
         """Lock memory on Windows using VirtualLock."""
         try:
-            import ctypes
-            from ctypes import wintypes
-            
             kernel32 = ctypes.windll.kernel32
             addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
             
@@ -144,23 +141,31 @@ class TimingAttackMitigation:
         Returns:
             True if sequences are equal, False otherwise
         """
-        # Length check must also be constant-time
-        length_match = len(a) == len(b)
+        # Constant-time length comparison
+        len_a, len_b = len(a), len(b)
+        length_match = len_a == len_b
         
-        # Pad to same length for constant-time comparison
-        if not length_match:
-            # Pad shorter sequence to avoid early termination
-            max_len = max(len(a), len(b))
-            a = a.ljust(max_len, b'\x00')
-            b = b.ljust(max_len, b'\x00')
+        # Always process the maximum length to avoid timing differences
+        max_len = max(len_a, len_b) if len_a != len_b else len_a
+        
+        # Extend both sequences to max length (constant time padding)
+        a_padded = a + b'\x00' * (max_len - len_a)
+        b_padded = b + b'\x00' * (max_len - len_b)
         
         # XOR all bytes - result is 0 only if all bytes match
         result = 0
-        for x, y in zip(a, b):
-            result |= x ^ y
+        # Process all bytes regardless of actual length
+        for i in range(max_len):
+            result |= a_padded[i] ^ b_padded[i]
         
-        # Return True only if both length matched AND all bytes matched
-        return length_match and (result == 0)
+        # Use bitwise operations to avoid branching
+        # length_match is 1 if True, 0 if False
+        # (result == 0) is 1 if True, 0 if False
+        # Both must be 1 for final result to be True
+        length_match_bit = 1 if length_match else 0
+        content_match_bit = 1 if result == 0 else 0
+        
+        return (length_match_bit & content_match_bit) == 1
     
     @staticmethod
     def constant_time_select(condition: bool, true_value: int, false_value: int) -> int:
@@ -498,13 +503,13 @@ def secure_zero_memory(data: Union[bytearray, bytes]) -> None:
             else:
                 # On POSIX, try to use memory barrier if available
                 try:
-                    import ctypes.util
-                    libc = ctypes.CDLL(ctypes.util.find_library("c"))
+                    from ctypes.util import find_library
+                    libc = ctypes.CDLL(find_library("c"))
                     if hasattr(libc, '__sync_synchronize'):
                         libc.__sync_synchronize()
-                except:
+                except (OSError, AttributeError, TypeError):
                     pass
-        except:
+        except (OSError, AttributeError):
             pass
     
     elif isinstance(data, bytes):

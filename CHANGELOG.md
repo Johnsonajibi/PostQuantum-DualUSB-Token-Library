@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.5] - 2025-10-26
+
+### Changed
+- Added comprehensive Release Notes section to README for better visibility on PyPI
+- Embedded recent changelog entries (0.15.0-0.15.4) directly in README
+
+### Notes
+- Improves documentation accessibility by making changelog visible on PyPI page
+- No functional code changes from 0.15.4
+
+## [0.15.4] - 2025-10-26
+
+### Changed
+- Added prominent security notice to README warning users to upgrade from versions prior to 0.15.3
+- Updated README with installation instructions and upgrade command
+- Improved documentation clarity and removed marketing language
+
+### Notes
+- This is a documentation-only release to ensure PyPI page displays critical security information
+- No functional code changes from 0.15.3
+
+## [0.15.3] - 2025-10-26
+
+### Security Fixes - CRITICAL UPDATE REQUIRED
+- **CRITICAL**: Fixed signature verification bypass in PQCRYPTO backend where `verify()` always returned `True` regardless of signature validity
+- **HIGH**: Fixed path traversal vulnerability in `InputValidator.validate_path()` that allowed access to system directories
+- **MEDIUM**: Improved constant-time comparison implementation to prevent timing side-channel attacks
+- **LOW**: Enhanced error messages to prevent information disclosure
+- **LOW**: Strengthened password validation to detect weak patterns and excessive repeated characters
+
+### Technical Details
+- Signature verification now properly returns the boolean result from `pqcrypto.sign.verify()`
+- Path validation includes URI scheme detection, network path blocking, and system directory protection
+- Constant-time comparison uses consistent padding and bitwise operations to eliminate timing variations
+- Error messages standardized to prevent sensitive information leakage
+- Password validation includes repeated character detection and reasonable length limits
+
+### Notes
+- **This is a mandatory security update**. All users should upgrade immediately.
+- All changes maintain backward compatibility while significantly improving security posture.
+- Comprehensive security testing confirms all vulnerabilities are resolved.
+
+## [0.15.2] - 2025-10-22
+
+### Fixed
+- Corrected documentation inconsistency in `generate_kem_keypair()` method - docstring now correctly states it returns `(secret_key, public_key)` tuple.
+- Fixed all code examples throughout codebase (18 files) to use correct variable order matching the actual implementation.
+- Updated usage examples in package documentation, README files, and test files for consistency.
+
+### Notes
+- This is a documentation-only patch release. No functional code changes. All tests passing.
+
+## [0.15.1] - 2025-10-22
+
+### Fixed
+- PQCRYPTO backend detection updated to support standardized module names `pqcrypto.kem.ml_kem_1024` and `pqcrypto.sign.ml_dsa_65` with fallback to legacy `kyber1024`/`dilithium3`.
+- Resolved OverflowError in side-channel dummy operations by masking to 256-bit width.
+- Verified HybridCrypto PQC roundtrip and classical fallback via local tests.
+
+### Notes
+- This is a safe, backward-compatible patch release. Public APIs unchanged.
+
+## [0.15.0] - 2024-01-XX
+
+### Added
+- **PQCRYPTO Backend Support**: Added priority support for `pqcrypto` library (pure Python, NIST-standard PQC algorithms)
+  - Kyber1024 for key encapsulation (KEM)
+  - Dilithium3 for digital signatures
+  - Pure Python implementation, no compilation required
+  - Cross-platform compatibility (Windows, Linux, macOS)
+- Enhanced backend detection and fallback mechanism
+- Improved installation script (`install_rust_pqc.py`) with PQCRYPTO priority
+- Comprehensive backend testing and validation
+- Better error handling for missing optional dependencies
+
+### Changed
+- Backend priority order: PQCRYPTO → CPP → Rust → OQS → Classical
+- Updated dependencies: `pqcrypto>=0.3.4` now included as core dependency
+- Improved backend initialization with better error messages
+- Enhanced logging for backend selection process
+- Package name standardized to `pqcdualusb` on PyPI
+
+### Fixed
+- Fixed `rust_pqc` version check bug (was checking for non-existent version 1.2.0)
+- Corrected version attribute access in rust_pqc backend
+- Fixed version string in `__init__.py` (was 0.1.0, now correctly shows 0.15.0)
+- Improved backend availability checking
+
+### Security
+- All backends use NIST-standardized PQC algorithms (Kyber1024, Dilithium3)
+- Power analysis attack countermeasures maintained across all backends
+- Side-channel attack protection enhanced
+- Constant-time operations where supported by backend
+
+### Documentation
+- Added comprehensive RELEASE_NOTES for v0.15.0
+- Updated installation instructions for PQCRYPTO backend
+- Added migration guide from version 0.14
+- Documented backend selection and configuration
+
 ## [0.1.4] - 2025-10-18
 
 ### Changed

@@ -122,6 +122,32 @@ except Exception as e:
     HAS_OQS = False
     OQS_ERROR = f"liboqs system library missing: {e}"
 
+# Try PQCRYPTO (pure Python, NIST-standard, high reliability)
+# Support both legacy module names (Kyber/Dilithium) and standardized ML-KEM/ML-DSA names.
+HAS_PQCRYPTO = False
+PQCRYPTO_ERROR = None
+try:
+    import pqcrypto  # type: ignore
+    try:
+        # Preferred: NIST standardized names available in newer pqcrypto versions
+        import pqcrypto.kem.ml_kem_1024 as _pq_kem  # type: ignore
+        import pqcrypto.sign.ml_dsa_65 as _pq_sig   # type: ignore
+        HAS_PQCRYPTO = True
+        PQCRYPTO_ERROR = None
+    except ImportError:
+        # Fallback: legacy Kyber/Dilithium module names
+        try:
+            import pqcrypto.kem.kyber1024 as _pq_kem  # type: ignore
+            import pqcrypto.sign.dilithium3 as _pq_sig  # type: ignore
+            HAS_PQCRYPTO = True
+            PQCRYPTO_ERROR = None
+        except ImportError as e2:
+            HAS_PQCRYPTO = False
+            PQCRYPTO_ERROR = str(e2)
+except ImportError as e:
+    HAS_PQCRYPTO = False
+    PQCRYPTO_ERROR = str(e)
+
 # Try C++ PQC (our primary backend - fastest and most complete)
 HAS_CPP_PQC = False
 CPP_PQC_ERROR = None
@@ -134,7 +160,7 @@ except ImportError as e:
     CPP_PQC_ERROR = str(e)
 
 # Try Rust PQC (fallback native implementation)
-_MIN_RUST_PQC_VERSION = (1, 2, 0)
+_MIN_RUST_PQC_VERSION = (0, 1, 5)
 HAS_RUST_PQC = False
 RUST_PQC_ERROR = None
 
@@ -145,7 +171,8 @@ try:
 except ImportError:
     # Path 2: Try the dev build location (for local development)
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "rust_pqc_build"))
+        # The build directory is typically inside the project, not a separate one
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         import rust_pqc
         HAS_RUST_PQC = True
         RUST_PQC_ERROR = None
@@ -154,20 +181,22 @@ except ImportError:
         RUST_PQC_ERROR = str(e)
     finally:
         # Clean up sys.path - don't leave our temp path in there
-        if str(Path(__file__).resolve().parent.parent / "rust_pqc_build") in sys.path:
-            sys.path.remove(str(Path(__file__).resolve().parent.parent / "rust_pqc_build"))
+        if str(Path(__file__).resolve().parent.parent) in sys.path:
+            sys.path.remove(str(Path(__file__).resolve().parent.parent))
 
 # Version check: make sure rust_pqc is new enough
 if HAS_RUST_PQC:
     try:
-        major, minor, patch = rust_pqc.pqc_version()
+        # Use __version__ string as created by our install script
+        version_str = rust_pqc.__version__
+        major, minor, patch = map(int, version_str.split('.'))
         if (major, minor, patch) < _MIN_RUST_PQC_VERSION:
             HAS_RUST_PQC = False
-            RUST_PQC_ERROR = f"rust_pqc too old: {major}.{minor}.{patch} (need >= {'.'.join(map(str, _MIN_RUST_PQC_VERSION))})"
-    except AttributeError:
-        # No version function? Probably incompatible
+            RUST_PQC_ERROR = f"rust_pqc too old: {version_str} (need >= {'.'.join(map(str, _MIN_RUST_PQC_VERSION))})"
+    except (AttributeError, ValueError):
+        # No __version__ or invalid format? Incompatible.
         HAS_RUST_PQC = False
-        RUST_PQC_ERROR = "rust_pqc missing version API – incompatible"
+        RUST_PQC_ERROR = "rust_pqc missing version API or has invalid format – incompatible"
 
 # ============================================================================
 # Power Analysis Protection (Side-Channel Attack Countermeasures)
@@ -230,10 +259,10 @@ class SideChannelProtection:
         # Dummy computations that appear like real crypto work
         dummy_data = secrets.token_bytes(32)
         for _ in range(count):
-            # Bitwise operations
+            # Bitwise operations with width-masking to keep values in 256-bit range
             result = int.from_bytes(dummy_data, 'big')
             result ^= secrets.randbelow(2**256)
-            result = (result << 7) | (result >> 249)
+            result = ((result << 7) | (result >> 249)) & ((1 << 256) - 1)
             dummy_data = result.to_bytes(32, 'big')
     
     @staticmethod
@@ -400,6 +429,7 @@ def _derive_key(passphrase: str, salt: bytes) -> tuple[bytes, dict]:
 
 class PqcBackend(Enum):
     """Post-quantum cryptography backend types."""
+    PQCRYPTO = auto() # Pure Python (priority)
     CPP = auto()   # C++ liboqs (primary)
     RUST = auto()  # Rust native (fallback) 
     OQS = auto()   # Python OQS (fallback)
@@ -422,27 +452,38 @@ class PostQuantumCrypto:
         self.sig_algorithm = sig_algorithm or SecurityConfig.PQC_SIG_ALGORITHM
         
         # Check if any PQC backend is available
-        if not HAS_CPP_PQC and not HAS_RUST_PQC and not HAS_OQS and not allow_fallback:
+        if not HAS_PQCRYPTO and not HAS_CPP_PQC and not HAS_RUST_PQC and not HAS_OQS and not allow_fallback:
             raise RuntimeError(
                 "No post-quantum library available. "
-                "Install cpp-pqc, rust-pqc wheel or python-oqs, or pass allow_fallback=True "
+                "Install 'pqcrypto', cpp-pqc, rust-pqc wheel or python-oqs, or pass allow_fallback=True "
                 "to accept classical crypto (NOT quantum-safe)."
             )
         
         # Power analysis protection available
         self.power_protection_enabled = POWER_ANALYSIS_PROTECTION
         
-        # Try C++ PQC first (preferred backend)
+    # Backend priority: PQCRYPTO -> C++ -> Rust -> OQS
+        
+        # Try PQCRYPTO first (most reliable)
+        if HAS_PQCRYPTO:
+            self.backend = PqcBackend.PQCRYPTO
+            # Use the resolved modules from detection above (supports ML-KEM/ML-DSA or Kyber/Dilithium)
+            self.pqcrypto_kem = _pq_kem
+            self.pqcrypto_sig = _pq_sig
+            _secure_log('info', 'PQC backend initialized successfully (using pqcrypto)')
+            return
+
+        # Try C++ PQC second (fastest)
         if HAS_CPP_PQC:
             self.backend = PqcBackend.CPP
             try:
                 self.cpp_pqc = cpp_pqc.CppPostQuantumCrypto(self.kem_algorithm, self.sig_algorithm)
                 # Initialization successful - using C++ backend
-                _secure_log('info', 'PQC backend initialized successfully')
+                _secure_log('info', 'PQC backend initialized successfully (using cpp_pqc)')
                 return
             except Exception as e:
                 # C++ backend unavailable, try next backend
-                _secure_log('debug', 'C++ backend unavailable, trying next backend')
+                _secure_log('debug', f'C++ backend unavailable ({e}), trying next backend')
                 pass
                 # Fall through to Rust PQC
         
@@ -452,11 +493,11 @@ class PostQuantumCrypto:
             try:
                 self.rust_pqc = rust_pqc.RustPostQuantumCrypto(self.kem_algorithm, self.sig_algorithm)
                 # Initialization successful - using Rust backend
-                _secure_log('info', 'PQC backend initialized successfully')
+                _secure_log('info', 'PQC backend initialized successfully (using rust_pqc)')
                 return
             except Exception as e:
                 # Rust backend unavailable, try next backend
-                _secure_log('debug', 'Rust backend unavailable, trying next backend')
+                _secure_log('debug', f'Rust backend unavailable ({e}), trying next backend')
                 pass
                 # Fall through to OQS
         
@@ -507,7 +548,7 @@ class PostQuantumCrypto:
                     self.oqs_kem_algorithm = fallback_kem
                     self.oqs_sig_algorithm = fallback_sig
                     # Initialization successful - using OQS with fallback algorithms
-                    _secure_log('info', 'PQC backend initialized with fallback algorithms')
+                    _secure_log('info', 'PQC backend initialized with fallback algorithms (using oqs)')
                     return
                 except Exception:
                     _secure_log('debug', 'OQS fallback algorithms unavailable')
@@ -522,7 +563,7 @@ class PostQuantumCrypto:
         # Loud classical warning (only shown once per session)
         warnings.warn(
             "Falling back to classical crypto (RSA-4096) - NOT quantum-safe. "
-            "Install cpp-pqc, rust-pqc or python-oqs for quantum resistance.",
+            "Install pqcrypto, cpp-pqc, rust-pqc or python-oqs for quantum resistance.",
             RuntimeWarning,
             stacklevel=2
         )
@@ -540,10 +581,14 @@ class PostQuantumCrypto:
         Mechanism' - fancy crypto speak for "secure key exchange that quantum
         computers can't break."
         
-        Returns a tuple: (public_key, secret_key)
+        Returns a tuple: (secret_key, public_key)
         """
         def _generate_keypair():
             # Try our backends in priority order: C++ → Rust → OQS → Classical
+            if self.backend == PqcBackend.PQCRYPTO:
+                pk, sk = self.pqcrypto_kem.generate_keypair()
+                return sk, pk # Standardize to (secret, public)
+            
             if self.backend == PqcBackend.CPP:
                 # C++ is our primary backend - super fast and battle-tested
                 return self.cpp_pqc.generate_kem_keypair()
@@ -603,6 +648,10 @@ class PostQuantumCrypto:
         """
         def _generate_keypair():
             # Try backends in order: C++ → Rust → OQS → Classical
+            if self.backend == PqcBackend.PQCRYPTO:
+                pk, sk = self.pqcrypto_sig.generate_keypair()
+                return sk, pk # Standardize to (secret, public)
+
             if self.backend == PqcBackend.CPP:
                 return self.cpp_pqc.generate_sig_keypair()
             
@@ -638,6 +687,9 @@ class PostQuantumCrypto:
         Returns: (ciphertext, shared_secret)
         """
         def _encapsulate():
+            if self.backend == PqcBackend.PQCRYPTO:
+                return self.pqcrypto_kem.encrypt(public_key)
+
             if self.backend == PqcBackend.CPP:
                 return self.cpp_pqc.kem_encapsulate(public_key)
             
@@ -692,6 +744,9 @@ class PostQuantumCrypto:
         Returns: The shared secret (bytes)
         """
         def _decapsulate():
+            if self.backend == PqcBackend.PQCRYPTO:
+                return self.pqcrypto_kem.decrypt(secret_key, ciphertext)
+
             if self.backend == PqcBackend.CPP:
                 return self.cpp_pqc.kem_decapsulate(secret_key, ciphertext)
             
@@ -746,6 +801,9 @@ class PostQuantumCrypto:
         Returns: The signature (bytes)
         """
         def _sign():
+            if self.backend == PqcBackend.PQCRYPTO:
+                return self.pqcrypto_sig.sign(secret_key, message)
+
             if self.backend == PqcBackend.CPP:
                 return self.cpp_pqc.sign(message, secret_key)
             
@@ -800,6 +858,12 @@ class PostQuantumCrypto:
         Returns: True if valid, False if invalid/tampered
         """
         def _verify():
+            if self.backend == PqcBackend.PQCRYPTO:
+                try:
+                    return self.pqcrypto_sig.verify(public_key, message, signature)
+                except Exception:
+                    return False
+
             if self.backend == PqcBackend.CPP:
                 return self.cpp_pqc.verify(message, signature, public_key)
             
@@ -1077,7 +1141,7 @@ class HybridCrypto:
         try:
             return aes_gcm.decrypt(nonce, ciphertext, None)
         except InvalidTag:
-            raise ValueError("Decryption failed - invalid key or corrupted data")
+            raise ValueError("Authentication failed")
 
 
 def _encrypt_backup(plaintext: bytes, passphrase: str, meta: dict) -> bytes:
@@ -1147,6 +1211,7 @@ def get_available_backends() -> Dict[str, bool]:
         "cpp_pqc": True/False,
         "rust_pqc": True/False,
         "oqs": True/False,
+        "pqcrypto": True/False,
         "argon2": True/False,
         "cryptography": True/False,
         "power_analysis_protection": True/False
@@ -1156,6 +1221,7 @@ def get_available_backends() -> Dict[str, bool]:
         "cpp_pqc": HAS_CPP_PQC,
         "rust_pqc": HAS_RUST_PQC,
         "oqs": HAS_OQS,
+        "pqcrypto": HAS_PQCRYPTO,
         "argon2": HAS_ARGON2,
         "cryptography": HAS_CRYPTOGRAPHY,
         "power_analysis_protection": POWER_ANALYSIS_PROTECTION
@@ -1169,4 +1235,4 @@ def check_pqc_requirements() -> bool:
     Returns True if at least one PQC backend (C++, Rust, or OQS) is working.
     Returns False if we're stuck with classical crypto only.
     """
-    return HAS_CPP_PQC or HAS_RUST_PQC or HAS_OQS
+    return HAS_PQCRYPTO or HAS_CPP_PQC or HAS_RUST_PQC or HAS_OQS

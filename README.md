@@ -9,15 +9,28 @@
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/Coverage-90%25-brightgreen.svg)]()
 
-A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
+A Python library for post-quantum cryptographic dual USB backup operations with hardware security features and side-channel attack countermeasures.
+
+> **⚠️ SECURITY NOTICE:** Critical security vulnerabilities were fixed in version 0.15.3 (released October 26, 2025). Users of versions prior to 0.15.3 should upgrade immediately. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 > **NOTE:** This is a library package designed to be imported into your applications. It provides a set of functions to manage secure backups.
 
+## Installation
+
+```bash
+pip install pqcdualusb
+```
+
+**Upgrade to latest version:**
+```bash
+pip install --upgrade pqcdualusb
+```
+
 ## Overview
 
-The **PQC Dual USB Library** provides a robust, enterprise-grade solution for securing data against threats from both classical and quantum computers. It offers a functional API for developers to integrate post-quantum cryptography (PQC) into applications requiring secure data storage, especially for scenarios involving redundant backups on physical devices like USB drives.
+The **PQC Dual USB Library** provides an implementation for securing data against threats from both classical and quantum computers. It offers a functional API for developers to integrate post-quantum cryptography (PQC) into applications requiring secure data storage, particularly for scenarios involving redundant backups on physical devices like USB drives.
 
-The library is designed with a "secure-by-default" philosophy, automatically handling complex security operations like side-channel attack mitigation, secure memory management, and hybrid cryptographic schemes.
+The library implements security operations including side-channel attack mitigation, secure memory management, and hybrid cryptographic schemes.
 
 ### Quick Import Example
 
@@ -34,11 +47,11 @@ from pqcdualusb.pqc import pq_write_audit_keys
 
 ## Architectural Vision
 
-The core architecture is designed to be modular, extensible, and secure. It abstracts the complexity of cryptographic backends and hardware interactions, providing a clean and simple functional API to the application layer.
+The architecture is modular and extensible, abstracting cryptographic backends and hardware interactions through a functional API.
 
 ### High-Level Architecture
 
-The library is composed of several focused modules that work together:
+The library consists of several focused modules:
 
 -   **`storage.py`**: Manages the state of the primary drive and orchestrates high-level operations like initialization and key rotation.
 -   **`backup.py`**: Handles the creation and restoration of encrypted backup files.
@@ -50,7 +63,7 @@ The library is composed of several focused modules that work together:
 
 ### PQC Backend Selection Logic
 
-The library prioritizes performance and security by intelligently selecting the best available Post-Quantum Cryptography backend. This flowchart illustrates the decision-making process.
+The library selects the available Post-Quantum Cryptography backend based on installed dependencies.
 
 ```mermaid
 graph TD
@@ -66,39 +79,39 @@ graph TD
 ## Key Features
 
 ### Cryptographic Security
-- **Post-Quantum Cryptography**: NIST-standardized Kyber1024 (KEM) and Dilithium3 (signatures).
-- **Hybrid Encryption**: Combines classical AES-256-GCM with post-quantum key encapsulation for robust, dual-layer protection.
-- **Power Analysis Protection**: Built-in software countermeasures (instruction jitter, random delays) to obfuscate power consumption patterns and mitigate side-channel attacks.
-- **Secure Key Derivation**: Uses Argon2id, a memory-hard function, to stretch user passphrases and resist brute-force attacks.
+- **Post-Quantum Cryptography**: NIST-standardized Kyber1024 (KEM) and Dilithium3 (signatures)
+- **Hybrid Encryption**: Combines classical AES-256-GCM with post-quantum key encapsulation
+- **Side-Channel Countermeasures**: Implements instruction jitter and random delays to mitigate power analysis attacks
+- **Key Derivation**: Uses Argon2id memory-hard function for passphrase stretching
 
 ### Hardware & Memory Security
-- **Dual USB Backup**: Manages redundant, secure storage across multiple USB devices.
-- **Device Validation**: Functions to verify that provided paths are on distinct, removable devices.
-- **Secure Memory Management**: Automatically zeroes out memory that held sensitive data (keys, plaintexts) to prevent data leakage.
-- **Timing Attack Mitigation**: Employs constant-time comparison operations where possible to prevent attackers from inferring secret data through timing variations.
+- **Dual USB Backup**: Manages redundant storage across multiple USB devices
+- **Device Validation**: Verifies paths are on distinct, removable devices
+- **Memory Management**: Automatically zeroes sensitive data in memory
+- **Timing Attack Mitigation**: Uses constant-time comparison operations for cryptographic values
 
-## ️ Threat Model and Security Guarantees
+## Threat Model and Security Guarantees
 
-This library is designed to protect against a range of threats, from common software vulnerabilities to sophisticated nation-state-level attacks.
+This library addresses several threat categories, from common software vulnerabilities to advanced attacks.
 
-### Attack Vectors Considered
-- **Quantum Attacks**: An adversary with a large-scale quantum computer attempting to break public-key cryptography.
-    - **Mitigation**: **Hybrid Encryption**. The use of Kyber1024 ensures that even if classical algorithms are broken, the encapsulated key remains secure.
-- **Side-Channel Attacks**: Timing attacks and power analysis.
-    - **Mitigation**: Constant-time operations for critical comparisons and software-based countermeasures like instruction jitter and randomized dummy operations.
-- **Physical Access Attacks**: Cold boot attacks or theft of USB drives.
-    - **Mitigation**: **Secure Memory Wiping** and strong, multi-layered encryption. Data on the drives is useless without the user's passphrase.
+### Attack Vectors Addressed
+- **Quantum Attacks**: Adversary with quantum computing capabilities attempting to break public-key cryptography
+    - **Mitigation**: Hybrid encryption using Kyber1024 ensures security against quantum attacks
+- **Side-Channel Attacks**: Timing attacks and power analysis
+    - **Mitigation**: Constant-time operations and software countermeasures including instruction jitter
+- **Physical Access Attacks**: Cold boot attacks or device theft
+    - **Mitigation**: Memory wiping and multi-layer encryption requiring user passphrase
 
 ### Limitations
-- This library cannot protect against keyloggers, screen-capture malware, or other compromises of the host operating system. The security of the overall system depends on the security of the environment in which it runs.
+- This library cannot protect against host system compromises including keyloggers, screen-capture malware, or OS-level attacks. System security depends on the integrity of the host environment.
 
-## ️ Roadmap
+## Roadmap
 
-This project is under active development. Our goals for the near future include:
+Development roadmap for upcoming features:
 
 ### Q4 2025
-- **[Feature] High-Level `BackupManager` Class**:
-    - Implement an optional `BackupManager` class to provide a simpler, high-level API for orchestrating dual-drive backups.
+- **High-Level `BackupManager` Class**:
+    - Implement an optional `BackupManager` class for simplified dual-drive backup orchestration
 - **[Security] External Security Audit**:
     - Engage a third-party security firm to perform a full audit of the cryptographic and security-sensitive code.
 - **[CI/CD] Automated PyPI Publishing**:
@@ -670,6 +683,51 @@ graph TB
     style T6 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
+## Release Notes
+
+### Version 0.15.5 (2025-10-26)
+**Documentation Improvement**
+- Added comprehensive Release Notes section to README for better visibility on PyPI
+- Embedded recent changelog entries directly in README so users can see version history without leaving PyPI
+- This is a documentation-only release with no functional code changes from 0.15.4
+
+### Version 0.15.4 (2025-10-26)
+**Documentation Update**
+- Added prominent security notice to README warning users to upgrade from versions prior to 0.15.3
+- Updated README with installation instructions and upgrade command
+- Improved documentation clarity and removed marketing language
+- This is a documentation-only release with no functional code changes from 0.15.3
+
+### Version 0.15.3 (2025-10-26)
+**🚨 CRITICAL SECURITY UPDATE - UPGRADE IMMEDIATELY**
+
+This release fixes multiple security vulnerabilities discovered in earlier versions:
+
+- **CRITICAL**: Fixed signature verification bypass in PQCRYPTO backend where `verify()` always returned `True` regardless of signature validity
+- **HIGH**: Fixed path traversal vulnerability in `InputValidator.validate_path()` that allowed access to system directories
+- **MEDIUM**: Improved constant-time comparison implementation to prevent timing side-channel attacks
+- **LOW**: Enhanced error messages to prevent information disclosure
+- **LOW**: Strengthened password validation to detect weak patterns and excessive repeated characters
+
+**All users must upgrade immediately.** All changes maintain backward compatibility while significantly improving security posture. Comprehensive security testing confirms all vulnerabilities are resolved.
+
+### Version 0.15.2 (2025-10-22)
+- Fixed documentation inconsistency in `generate_kem_keypair()` method
+- Updated all code examples to use correct variable order
+- Documentation-only patch release, no functional code changes
+
+### Version 0.15.1 (2025-10-22)
+- PQCRYPTO backend detection updated to support standardized module names
+- Resolved OverflowError in side-channel dummy operations
+- Backward-compatible patch release
+
+### Version 0.15.0 (2024-01-XX)
+- Added PQCRYPTO backend support (pure Python, NIST-standard PQC algorithms)
+- Enhanced backend detection and fallback mechanism
+- Improved installation and cross-platform compatibility
+
+For complete changelog, see [CHANGELOG.md](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/blob/main/CHANGELOG.md).
+
 ## Testing
 
 The library includes a comprehensive test suite to ensure correctness and security.
@@ -706,3 +764,12 @@ The pre-commit hooks will automatically enforce the code style.
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Author
+
+**Johnson Ajibi**  
+Email: Johnsonajibi@jtnetsolutions.com
+
+---
+
+For questions, issues, or contributions, please visit the [GitHub repository](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library).

@@ -417,25 +417,66 @@ class InputValidator:
     """Enhanced input validation utilities."""
     
     @staticmethod
-    def validate_path(path: Union[str, Path], must_exist: bool = True, must_be_dir: bool = False) -> Path:
+    def validate_path(path: Union[str, Path], must_exist: bool = True, must_be_dir: bool = False, allowed_base: Union[str, Path, None] = None) -> Path:
         """
-        Validate and normalize a file system path.
+        Validate and normalize a file system path with security checks.
         
         Args:
             path: Path to validate
             must_exist: Whether the path must exist
             must_be_dir: Whether the path must be a directory
+            allowed_base: Optional base directory to restrict access to (prevents path traversal)
             
         Returns:
             Validated Path object
             
         Raises:
-            ValueError: If validation fails
+            ValueError: If validation fails or path traversal is detected
         """
         if not path:
             raise ValueError("Path cannot be empty")
         
-        path_obj = Path(path).resolve()
+        # Convert to string for security checks
+        path_str = str(path)
+        
+        # Check for URI schemes (should be rejected)
+        if '://' in path_str or path_str.startswith('file:'):
+            raise ValueError(f"URI schemes not allowed in file paths: {path_str}")
+        
+        # Check for UNC paths and network shares
+        if path_str.startswith('\\\\') or path_str.startswith('//'):
+            raise ValueError(f"Network paths not allowed: {path_str}")
+        
+        # Check for obvious path traversal attempts
+        dangerous_patterns = ['../', '..\\', '/../', '\\..\\', '/..', '\\..', '..']
+        if any(pattern in path_str for pattern in dangerous_patterns):
+            raise ValueError(f"Path traversal detected in path: {path_str}")
+        
+        # Check for absolute paths to sensitive system directories
+        sensitive_dirs = ['/etc/', '/bin/', '/sbin/', '/usr/bin/', '/usr/sbin/', 
+                         'C:\\Windows\\', 'C:\\Program Files\\', '/System/', '/Applications/',
+                         '/etc', '/bin', '/sbin', '/usr/bin', '/usr/sbin', 
+                         'C:\\Windows', 'C:\\Program Files', '/System', '/Applications']
+        path_lower = path_str.lower()
+        if any(path_lower.startswith(sensitive.lower()) for sensitive in sensitive_dirs):
+            raise ValueError(f"Access to system directory not allowed: {path_str}")
+        
+        try:
+            path_obj = Path(path).resolve()
+        except (OSError, ValueError) as e:
+            raise ValueError(f"Invalid path: {path_str}: {e}")
+        
+        # If allowed_base is specified, ensure path is within it
+        if allowed_base is not None:
+            try:
+                allowed_base_resolved = Path(allowed_base).resolve()
+                # Check if the resolved path is within the allowed base
+                try:
+                    path_obj.relative_to(allowed_base_resolved)
+                except ValueError:
+                    raise ValueError(f"Path outside allowed directory: {path_obj} not in {allowed_base_resolved}")
+            except (OSError, ValueError) as e:
+                raise ValueError(f"Invalid allowed_base path: {allowed_base}: {e}")
         
         if must_exist and not path_obj.exists():
             raise ValueError(f"Path does not exist: {path_obj}")
@@ -470,6 +511,17 @@ class InputValidator:
         weak_patterns = ['password', '123456', 'qwerty', 'admin', 'letmein']
         if passphrase.lower() in weak_patterns:
             raise ValueError("Passphrase is too common - use a stronger passphrase")
+        
+        # Check for repeated characters (more than 50% of the password)
+        if len(passphrase) > 0:
+            most_frequent_char = max(set(passphrase), key=passphrase.count)
+            if passphrase.count(most_frequent_char) > len(passphrase) * 0.5:
+                raise ValueError("Passphrase has too many repeated characters")
+        
+        # Check for overly long passphrases (potential DoS)
+        max_reasonable_length = 200
+        if len(passphrase) > max_reasonable_length:
+            raise ValueError(f"Passphrase too long (max {max_reasonable_length} characters)")
         
         return passphrase
     

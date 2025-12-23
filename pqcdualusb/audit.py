@@ -148,7 +148,6 @@ def verify_audit_log(pq_pk_path: Optional[Path] = None) -> bool:
 import atexit
 def _cleanup_sensitive_data():
     """Cleanup function called on program exit."""
-    global AUDIT_KEY
     if AUDIT_KEY:
         secure_zero_memory(bytearray(AUDIT_KEY))
 
