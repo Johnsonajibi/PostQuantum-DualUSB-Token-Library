@@ -25,22 +25,37 @@ logger = logging.getLogger("dual_usb")
 AUDIT_LOG_PATH = Path("pqcdualusb_audit.log")
 AUDIT_KEY_PATH = Path(os.environ.get("PQC_DUALUSB_AUDIT_KEY", str(Path.home() / ".pqcdualusb_audit.key")))
 
-if AUDIT_KEY_PATH.exists():
-    AUDIT_KEY = AUDIT_KEY_PATH.read_bytes()
-else:
-    AUDIT_KEY = secrets.token_bytes(32)
-    AUDIT_KEY_PATH.write_bytes(AUDIT_KEY)
-    try:
-        AUDIT_KEY_PATH.chmod(0o600)
-    except Exception:
-        pass
+# Lazy-loaded audit key (loaded on first use to minimize attack window)
+_AUDIT_KEY: Optional[bytes] = None
 
+def _get_audit_key() -> bytes:
+    """
+    Lazily load or generate the audit key.
+    This minimizes the attack window for memory forensics by only loading
+    the key when actually needed.
+    """
+    global _AUDIT_KEY
+    if _AUDIT_KEY is None:
+        if AUDIT_KEY_PATH.exists():
+            _AUDIT_KEY = AUDIT_KEY_PATH.read_bytes()
+        else:
+            _AUDIT_KEY = secrets.token_bytes(32)
+            AUDIT_KEY_PATH.write_bytes(_AUDIT_KEY)
+            try:
+                AUDIT_KEY_PATH.chmod(0o600)
+            except Exception as e:
+                logger.warning("Failed to set secure permissions (0o600) on audit key file %s: %s. "
+                              "The audit HMAC key may have insecure permissions.", AUDIT_KEY_PATH, e)
+    return _AUDIT_KEY
+
+# Initialize audit log file with secure permissions
 try:
     if not AUDIT_LOG_PATH.exists():
         AUDIT_LOG_PATH.touch(exist_ok=True)
     AUDIT_LOG_PATH.chmod(0o600)
-except Exception:
-    pass
+except Exception as e:
+    logger.warning("Failed to set secure permissions (0o600) on audit log file %s: %s. "
+                  "The audit log may have insecure permissions.", AUDIT_LOG_PATH, e)
 
 _AUDIT_CHAIN: Optional[str] = None
 _PQ_AUDIT_SK_PATH: Optional[Path] = None
@@ -65,7 +80,7 @@ def _audit(event: str, details: dict) -> None:
     safe = {k: ("<bytes>" if isinstance(v, (bytes, bytearray)) else v) for k, v in (details or {}).items()}
     base = f"{_now_iso()}|{event}|{json.dumps(safe, separators=(',',':'))}|prev={_AUDIT_CHAIN or ''}"
 
-    mac = hmac.new(AUDIT_KEY, base.encode(), hashlib.sha256).hexdigest()
+    mac = hmac.new(_get_audit_key(), base.encode(), hashlib.sha256).hexdigest()
     chain_input = base + "|hmac=" + mac
     _AUDIT_CHAIN = hashlib.sha3_512(chain_input.encode()).hexdigest()
 
@@ -129,7 +144,7 @@ def verify_audit_log(pq_pk_path: Optional[Path] = None) -> bool:
             if prev_chain and ("prev=" + prev_chain) not in parts:
                 logger.error("Audit chain mismatch")
                 return False
-            expect_mac = hmac.new(AUDIT_KEY, base.encode(), hashlib.sha256).hexdigest()
+            expect_mac = hmac.new(_get_audit_key(), base.encode(), hashlib.sha256).hexdigest()
             got_mac = hmac_field.split("=", 1)[1]
             if got_mac != expect_mac:
                 logger.error("Audit HMAC mismatch")
@@ -148,7 +163,7 @@ def verify_audit_log(pq_pk_path: Optional[Path] = None) -> bool:
 import atexit
 def _cleanup_sensitive_data():
     """Cleanup function called on program exit."""
-    if AUDIT_KEY:
-        secure_zero_memory(bytearray(AUDIT_KEY))
+    if _AUDIT_KEY:
+        secure_zero_memory(bytearray(_AUDIT_KEY))
 
 atexit.register(_cleanup_sensitive_data)

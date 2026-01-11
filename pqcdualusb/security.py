@@ -20,8 +20,12 @@ import secrets
 import platform
 import ctypes
 import mmap
+import logging
 from typing import Union, List, Dict, Any
 from pathlib import Path
+
+# Logger for security warnings
+logger = logging.getLogger("dual_usb")
 
 
 class SecureMemory:
@@ -64,9 +68,13 @@ class SecureMemory:
             
             if kernel32.VirtualLock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data))):
                 self.locked = True
-        except Exception:
+            else:
+                logger.warning("VirtualLock failed to lock %d bytes of memory. "
+                              "Sensitive data may be swapped to disk.", len(self.data))
+        except Exception as e:
             # Memory locking failed, continue without it
-            pass
+            logger.warning("Failed to lock memory on Windows (VirtualLock): %s. "
+                          "Sensitive data may be swapped to disk.", e)
     
     def _lock_memory_posix(self):
         """Lock memory on POSIX systems using mlock."""
@@ -81,11 +89,16 @@ class SecureMemory:
             addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
             
             # Call mlock system call
-            if libc.mlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data))) == 0:
+            result = libc.mlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data)))
+            if result == 0:
                 self.locked = True
-        except Exception:
+            else:
+                logger.warning("mlock failed to lock %d bytes of memory (return code: %d). "
+                              "Sensitive data may be swapped to disk.", len(self.data), result)
+        except Exception as e:
             # Memory locking failed, continue without it
-            pass
+            logger.warning("Failed to lock memory on POSIX (mlock): %s. "
+                          "Sensitive data may be swapped to disk.", e)
     
     def _cleanup(self):
         """Securely zero and unlock memory."""

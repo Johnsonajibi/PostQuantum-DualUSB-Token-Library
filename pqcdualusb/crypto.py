@@ -419,9 +419,9 @@ def _derive_key(passphrase: str, salt: bytes) -> tuple[bytes, dict]:
                     _SCRYPT_WARNED = True
             
             # Fallback to scrypt
-            kdf = Scrypt(salt=salt, length=SecurityConfig.AES_KEY_SIZE, n=2**15, r=8, p=1)
+            kdf = Scrypt(salt=salt, length=SecurityConfig.AES_KEY_SIZE, n=2**18, r=8, p=1)
             key = kdf.derive(bytes(secure_buf[:len(passphrase_bytes)]))
-            return key, {"kdf": "scrypt", "n": 2**15, "r": 8, "p": 1}
+            return key, {"kdf": "scrypt", "n": 2**18, "r": 8, "p": 1}
     finally:
         # Clear passphrase from memory
         if 'passphrase_bytes' in locals():
