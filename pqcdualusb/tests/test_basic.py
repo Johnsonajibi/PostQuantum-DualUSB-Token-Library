@@ -110,7 +110,7 @@ class TestPQCIntegration(unittest.TestCase):
         pqc = PostQuantumCrypto()
         
         # Generate keypair
-        pk, sk = pqc.generate_kem_keypair()
+        sk, pk = pqc.generate_kem_keypair()
         self.assertIsInstance(pk, bytes)
         self.assertIsInstance(sk, bytes)
         self.assertGreater(len(pk), 0)

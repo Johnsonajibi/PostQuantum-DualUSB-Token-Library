@@ -22,22 +22,22 @@ Usage:
     
     # Initialize crypto
     crypto = PostQuantumCrypto()
-    public_key, secret_key = crypto.generate_kem_keypair()
+    secret_key, public_key = crypto.generate_kem_keypair()
     
     # Find USB drives
     drives = UsbDriveDetector.get_removable_drives()
     # Use logging for status messages instead of print()
 """
 
-__version__ = "0.1.0"
-__author__ = "PQC Dual USB Team"
+__version__ = "0.15.5"
+__author__ = "Johnson Ajibi"
 __license__ = "MIT"
 
 # Main public API exports
 from .crypto import PostQuantumCrypto, HybridCrypto, PqcBackend
 from .usb import UsbDriveDetector  
 from .security import SecurityConfig, SecureMemory, TimingAttackMitigation
-from .utils import ProgressReporter, InputValidator
+from .utils import ProgressReporter, InputValidator, AuditLogRotator
 
 # Convenience imports for most common use cases
 __all__ = [
@@ -55,6 +55,7 @@ __all__ = [
     # General utilities
     "ProgressReporter",
     "InputValidator",
+    "AuditLogRotator",
     
     # Version info
     "__version__"
