@@ -72,6 +72,41 @@ COMMIT_MESSAGE.md
 IMPROVEMENTS.md
 dd.py
 
+# Microsoft Office lock files (created when a file is open in Word/Excel)
+~$*.doc
+~$*.docx
+~$*.xls
+~$*.xlsx
+~$*.ppt
+~$*.pptx
+
+# Binary document formats — use .md instead
+*.docx
+*.pdf
+
+# Security audit reports — keep private, never publish
+SECURITY_AUDIT_REPORT.md
+
+# One-off dev/audit scripts — not part of the library
+security_audit.py
+vulnerability_check.py
+additional_security_checks.py
+final_validation.py
+usage_guide.py
+test_all.py
+
+# Redundant release notes — CHANGELOG.md is the single source of truth
+RELEASE_NOTES_v*.md
+GITHUB_RELEASE_NOTES_*.md
+GITHUB_RELEASE_DESCRIPTION.md
+GITHUB_RELEASE_GUIDE.md
+
+# Archived/superseded docs
+README_WITH_EMOJIS_ARCHIVE.md
+
+# Legacy build file — superseded by pyproject.toml
+setup.py
+
 # Development and personal files
 notes.txt
 todo.txt

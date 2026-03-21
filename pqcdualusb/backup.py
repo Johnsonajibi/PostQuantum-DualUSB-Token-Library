@@ -55,15 +55,50 @@ def _read_backup_meta(backup_file: Path) -> dict:
     data = json.loads(backup_file.read_text("utf-8"))
     return data.get("meta", {})
 
+def _validate_backup_schema(data: dict) -> None:
+    """Validate backup JSON structure before accessing nested keys."""
+    required: dict = {"meta": dict, "aead": dict, "kdf": dict}
+    for field, expected_type in required.items():
+        if field not in data:
+            raise ValueError(f"Invalid backup format: missing required field '{field}'")
+        if not isinstance(data[field], expected_type):
+            raise ValueError(f"Invalid backup format: field '{field}' must be an object")
+
+    aead_fields = {"nonce": str, "ct": str}
+    for field, expected_type in aead_fields.items():
+        if field not in data["aead"]:
+            raise ValueError(f"Invalid backup format: missing 'aead.{field}'")
+        if not isinstance(data["aead"][field], expected_type):
+            raise ValueError(f"Invalid backup format: 'aead.{field}' must be a string")
+
+    if "salt" not in data["kdf"]:
+        raise ValueError("Invalid backup format: missing 'kdf.salt'")
+    if not isinstance(data["kdf"]["salt"], str):
+        raise ValueError("Invalid backup format: 'kdf.salt' must be a string")
+
+
 def restore_from_backup(backup_file: Path, restore_primary: Path, passphrase: str) -> tuple[Path, Path]:
-    from .storage import write_token_primary # Defer import to avoid cycle
-    from .crypto import _derive_key
+    from .storage import write_token_primary  # Defer import to avoid cycle
+    from .crypto import _derive_key_with_stored_params
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-    data = json.loads(backup_file.read_text("utf-8"))
+    try:
+        data = json.loads(backup_file.read_text("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise ValueError(f"Backup file is not valid JSON: {e}") from e
+
+    _validate_backup_schema(data)
+
     meta = data["meta"]
     aead = data["aead"]
-    salt = bytes.fromhex(data["kdf"]["salt"])
-    key, _ = _derive_key(passphrase, salt)
-    pt = AESGCM(key).decrypt(bytes.fromhex(aead["nonce"]), bytes.fromhex(aead["ct"]), json.dumps(meta, separators=(",", ":")).encode())
+    kdf_params = data["kdf"]
+    try:
+        salt = bytes.fromhex(kdf_params["salt"])
+        nonce = bytes.fromhex(aead["nonce"])
+        ct = bytes.fromhex(aead["ct"])
+    except ValueError as e:
+        raise ValueError(f"Backup file contains invalid hex data: {e}") from e
+
+    key = _derive_key_with_stored_params(passphrase, salt, kdf_params)
+    pt = AESGCM(key).decrypt(nonce, ct, json.dumps(meta, separators=(",", ":")).encode())
     return write_token_primary(pt, restore_primary)

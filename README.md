@@ -11,6 +11,15 @@
 
 A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 
+> **SECURITY NOTICE — v0.1.5 (2026-03-21):** This release patches multiple security vulnerabilities
+> found during a full code audit. Users on v0.1.4 or earlier should upgrade immediately:
+> ```bash
+> pip install --upgrade pqcdualusb
+> ```
+> Fixes include: path traversal in `validate_path()`, weakened scrypt KDF (`n=2**15`),
+> `zip()`-based timing leak in constant-time comparison, OverflowError in side-channel dummy ops,
+> and error-message information disclosure. See [CHANGELOG.md](CHANGELOG.md) for full details.
+
 > **NOTE:** This is a library package designed to be imported into your applications. It provides a set of functions to manage secure backups.
 
 ## Overview
@@ -50,31 +59,44 @@ The library is composed of several focused modules that work together:
 
 ### PQC Backend Selection Logic
 
-The library prioritizes performance and security by intelligently selecting the best available Post-Quantum Cryptography backend. This flowchart illustrates the decision-making process.
+The library prioritizes performance and security by intelligently selecting the best available Post-Quantum Cryptography backend. Backends are tried in priority order: C++ (fastest) → Rust → OQS (Python bindings). Pass `allow_fallback=True` to accept classical-only mode when no PQC backend is installed.
 
 ```mermaid
 graph TD
-    A["Start: PostQuantumCrypto.__init__"] --> B{"Rust PQC Backend Available?"};
-    B -- Yes --> C["Set Backend = 'rust_pqc'"];
-    B -- No --> D{"python-oqs Backend Available?"};
-    D -- Yes --> E["Set Backend = 'oqs'"];
-    D -- No --> F["Raise RuntimeError: 'No PQC backend found'"];
-    C --> G["End: Ready for PQC Ops"];
-    E --> G;
+    A["Start: PostQuantumCrypto.__init__"] --> B{"C++ PQC Backend Available?"};
+    B -- Yes --> C["Set Backend = 'cpp_pqc'"];
+    B -- No --> D{"Rust PQC Backend Available?"};
+    D -- Yes --> E["Set Backend = 'rust_pqc'"];
+    D -- No --> F{"python-oqs Backend Available?"};
+    F -- Yes --> G["Set Backend = 'oqs'"];
+    F -- No --> H{"allow_fallback=True?"};
+    H -- Yes --> I["Set Backend = 'none' (classical only, NOT quantum-safe)"];
+    H -- No --> J["Raise RuntimeError: 'No PQC backend found'"];
+    C --> K["End: Ready for PQC Ops"];
+    E --> K;
+    G --> K;
+    I --> K;
 ```
 
 ## Key Features
 
 ### Cryptographic Security
 - **Post-Quantum Cryptography**: NIST-standardized Kyber1024 (KEM) and Dilithium3 (signatures).
-- **Hybrid Encryption**: Combines classical AES-256-GCM with post-quantum key encapsulation for robust, dual-layer protection.
-- **Power Analysis Protection**: Built-in software countermeasures (instruction jitter, random delays) to obfuscate power consumption patterns and mitigate side-channel attacks.
-- **Secure Key Derivation**: Uses Argon2id, a memory-hard function, to stretch user passphrases and resist brute-force attacks.
+- **Hybrid Encryption**: Combines classical AES-256-GCM with post-quantum key encapsulation for robust, dual-layer protection. The hybrid key mixes the classical Argon2id-derived key with the PQC shared secret using a `PQC_HYBRID_V1` domain separator.
+- **Power Analysis Protection**: Built-in software countermeasures (instruction jitter, random delays, 256-bit-masked dummy ops) to obfuscate power consumption patterns and mitigate side-channel attacks.
+- **Secure Key Derivation**: Uses Argon2id as the primary KDF (memory-hard, 64 MB, 4 iterations). Falls back to scrypt (`n=2**18`, 262,144 iterations) when argon2-cffi is not installed. KDF parameters are stored alongside each backup so restoration always uses the same work factor the backup was created with.
+- **Constant-Time Comparisons**: All security-critical byte comparisons use `hmac.compare_digest()` (stdlib C implementation) to prevent timing side-channel leaks.
+
+### Input & Path Security (v0.1.5)
+- **Path Traversal Protection**: `InputValidator.validate_path()` rejects `..` sequences, URI schemes (`://`, `file:`), UNC/network paths, and access to system directories (`/etc/`, `C:\Windows\`, etc.).
+- **Passphrase Hardening**: Maximum length cap (200 characters, DoS prevention), repeated-character detection (>50% same char), and an expanded list of banned common values.
+- **Backup Schema Validation**: `restore_from_backup()` validates the JSON structure of backup files before accessing any nested keys, preventing crashes on malformed or malicious files.
 
 ### Hardware & Memory Security
 - **Dual USB Backup**: Manages redundant, secure storage across multiple USB devices.
 - **Device Validation**: Functions to verify that provided paths are on distinct, removable devices.
-- **Secure Memory Management**: Automatically zeroes out memory that held sensitive data (keys, plaintexts) to prevent data leakage.
+- **Secure Memory Management**: Automatically zeroes out memory that held sensitive data (keys, plaintexts) to prevent data leakage. Memory-lock failures (`VirtualLock`/`mlock`) are now logged as warnings rather than silently ignored.
+- **Lazy Audit Key Loading**: The HMAC key used for audit log chaining is loaded on first use rather than at import time, minimising the window it spends in memory.
 - **Timing Attack Mitigation**: Employs constant-time comparison operations where possible to prevent attackers from inferring secret data through timing variations.
 
 ## ️ Threat Model and Security Guarantees
@@ -91,20 +113,45 @@ This library is designed to protect against a range of threats, from common soft
 
 ### Limitations
 - This library cannot protect against keyloggers, screen-capture malware, or other compromises of the host operating system. The security of the overall system depends on the security of the environment in which it runs.
+- Passing a passphrase via environment variable (the `--passphrase-env` CLI flag) exposes it to other processes with the same UID on Linux via `/proc/$pid/environ`. Use `getpass()` / interactive entry in production.
+
+## Known Issues
+
+### pqcrypto PyPI name collision (affects v0.15.x only, not this branch)
+
+The PyPI package name `pqcrypto` was reused in April 2025 by an unrelated project (`backbone-hq`, versions 0.3.x/0.4.x) that provides compiled CFFI bindings with different APIs and key-size conventions. The original pure-Python `pqcrypto` (2019–2022) that earlier versions of this library targeted no longer exists on PyPI.
+
+**Impact:** Any install that resolves `pqcrypto>=0.3.4` today receives the `backbone-hq` package, which is incompatible with `pqcdualusb`. This codebase (v0.1.5) does **not** depend on `pqcrypto` at all and is not affected. If you are using the `pqcrypto` backend from a GitHub snapshot of v0.15.x, switch to the `liboqs` backend:
+
+```bash
+pip install oqs          # liboqs Python bindings — actively maintained, stable API
+pip install pqcdualusb[oqs]
+```
+
+### Backward compatibility: scrypt work factor (v0.1.4 → v0.1.5)
+
+The scrypt fallback KDF work factor was raised from `n=2**15` to `n=2**18` in v0.1.5. Restore and verify operations read the `n` value stored in each backup's `kdf` block and re-derive using the original parameters, so **existing backups created under v0.1.4 remain readable**. New backups written after upgrading will use `n=2**18`.
 
 ## ️ Roadmap
 
 This project is under active development. Our goals for the near future include:
 
-### Q4 2025
+### Completed — Q4 2025 / Q1 2026
+- **[Security] Full code audit and vulnerability remediation** (v0.1.5): Path traversal, weak KDF,
+  timing side-channel, OverflowError, error disclosure, and backup schema validation all fixed.
+- **[Correctness] Backup KDF backward-compatibility** (v0.1.5): `restore_from_backup` and
+  `verify_backup` now honour stored KDF parameters, ensuring old backups remain readable after
+  a work-factor upgrade.
+
+### Q2 2026
 - **[Feature] High-Level `BackupManager` Class**:
     - Implement an optional `BackupManager` class to provide a simpler, high-level API for orchestrating dual-drive backups.
-- **[Security] External Security Audit**:
-    - Engage a third-party security firm to perform a full audit of the cryptographic and security-sensitive code.
 - **[CI/CD] Automated PyPI Publishing**:
     - Set up GitHub Actions to automatically build and publish new releases to PyPI upon tagging.
+- **[Security] External Security Audit**:
+    - Engage a third-party security firm to perform a full audit of the cryptographic and security-sensitive code.
 
-### Q1 2026
+### Q3 2026
 - **[Feature] Hardware Security Module (HSM) Support**:
     - Add an abstraction layer to support storing PQC keys on HSMs (e.g., YubiKey, NitroKey) via a PKCS#11 interface.
 - **[Performance] SIMD-Optimized Backends**:
@@ -128,9 +175,16 @@ pip install -e ".[dev]"
 ```
 
 ### 3. Backend Dependencies
-The library requires at least one PQC backend. The Rust backend is recommended for performance.
 
-#### Rust PQC Backend (Recommended)
+The library requires at least one PQC backend. Backends are selected automatically in priority order: **C++ > Rust > OQS**.
+
+#### C++ Backend (Primary — fastest)
+Pre-built compiled bindings to `liboqs`:
+```bash
+pip install pqcdualusb[cpp]
+```
+
+#### Rust Backend (Recommended if C++ unavailable)
 ```bash
 # Windows
 ./install_rust_windows.bat
@@ -138,13 +192,26 @@ The library requires at least one PQC backend. The Rust backend is recommended f
 # Linux/macOS
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 python build_rust_pqc.py
+
+pip install pqcdualusb[rust]
 ```
 
-#### OQS Backend (Alternative Fallback)
-If the Rust backend is not available, the library will fall back to `python-oqs`.
+#### OQS Backend (Portable fallback)
+Python bindings to `liboqs` — easiest to install, actively maintained, stable API:
 ```bash
 pip install oqs
+# or:
+pip install pqcdualusb[oqs]
 ```
+
+#### Install all backends at once
+```bash
+pip install pqcdualusb[all]
+```
+
+> **Note:** Do not install the `pqcrypto` package. The PyPI name was reused in 2025 by an
+> unrelated project with an incompatible API. Use the `oqs` backend instead.
+> See [Known Issues](#known-issues) for details.
 
 ## Quick Start Guide
 
@@ -480,33 +547,35 @@ flowchart TD
 
 #### 3.5. PQC Backend Selection Logic
 
-This shows how the library selects the appropriate Post-Quantum Cryptography backend at runtime.
+This shows how the library selects the appropriate Post-Quantum Cryptography backend at runtime. Priority: C++ (compiled liboqs) > Rust (native) > OQS (Python bindings) > classical fallback.
 
 ```mermaid
 flowchart TD
-    Start([PQC Module Import]) --> CheckRust{Rust PQC available?}
-    CheckRust -->|Yes| TestRust[Test Rust backend]
+    Start([PostQuantumCrypto init]) --> CheckCPP{C++ PQC available?}
+    CheckCPP -->|Yes| UseCPP[Set backend = 'cpp_pqc']
+    CheckCPP -->|No| CheckRust{Rust PQC available?}
+
+    CheckRust -->|Yes| UseRust[Set backend = 'rust_pqc']
     CheckRust -->|No| CheckOQS{python-oqs available?}
-    
-    TestRust --> RustWorks{Test successful?}
-    RustWorks -->|Yes| UseRust[Set backend = 'rust_pqc']
-    RustWorks -->|No| CheckOQS
-    
-    CheckOQS -->|Yes| TestOQS[Test OQS backend]
-    CheckOQS -->|No| Error[Raise RuntimeError: No PQC backend]
-    
-    TestOQS --> OQSWorks{Test successful?}
-    OQSWorks -->|Yes| UseOQS[Set backend = 'oqs']
-    OQSWorks -->|No| Error
-    
-    UseRust --> Ready([PQC Ready])
+
+    CheckOQS -->|Yes| UseOQS[Set backend = 'oqs']
+    CheckOQS -->|No| CheckFallback{allow_fallback=True?}
+
+    CheckFallback -->|Yes| UseClassical[Set backend = 'none' - classical only]
+    CheckFallback -->|No| Error[Raise RuntimeError: No PQC backend]
+
+    UseCPP --> Ready([PQC Ready])
+    UseRust --> Ready
     UseOQS --> Ready
+    UseClassical --> Ready
     Error --> End([Cannot use PQC features])
-    
+
     style Start fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
     style Ready fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style UseCPP fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     style UseRust fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     style UseOQS fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+    style UseClassical fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
     style Error fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
@@ -649,25 +718,31 @@ The security of the library is built on a defense-in-depth strategy, mapping spe
 ```mermaid
 graph TB
     T1[Quantum Computer Attack] --> M1[Hybrid Encryption: AES-GCM + Kyber1024]
-    T2[Side-Channel Attack] --> M2[Constant-time ops + Secure memory wiping]
+    T2[Side-Channel Attack] --> M2[hmac.compare_digest + SecureMemory wiping + dummy ops]
     T3[Physical Theft of Drives] --> M3[Strong encryption + Passphrase required]
-    T4[Brute-Force on Passphrase] --> M4[Argon2id KDF: Memory-hard function]
-    T5[Data Corruption] --> M5[Atomic writes: Temp file + move]
-    T6[Memory Forensics] --> M6[SecureMemory: Auto-zeroing sensitive data]
-    
+    T4[Brute-Force on Passphrase] --> M4[Argon2id KDF: 64 MB memory-hard, scrypt n=2^18 fallback]
+    T5[Data Corruption] --> M5[Atomic writes: Temp file + fsync + move]
+    T6[Memory Forensics] --> M6[SecureMemory: Auto-zeroing + lazy audit key loading]
+    T7[Path Traversal / Injection] --> M7[validate_path: blocks .., URI schemes, UNC, system dirs]
+    T8[Malformed Backup File] --> M8[Schema validation before any key access]
+
     style M1 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     style M2 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     style M3 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     style M4 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     style M5 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
     style M6 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-    
+    style M7 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+    style M8 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
+
     style T1 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
     style T2 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
     style T3 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
     style T4 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
     style T5 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
     style T6 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style T7 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style T8 fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
 ```
 
 ## Testing

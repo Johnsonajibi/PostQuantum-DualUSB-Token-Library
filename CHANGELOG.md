@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-03-21
+
+### Security (Critical)
+- **Path traversal fixed** (`security.py`, `utils.py`): `InputValidator.validate_path()` now
+  rejects URI schemes (`://`, `file:`), UNC/network paths (`\\\\`, `//`), explicit `..`
+  traversal sequences, and access to system directories (`/etc/`, `C:\Windows\`, etc.).
+  An optional `allowed_base` parameter enforces directory confinement.
+- **Scrypt KDF strengthened** (`crypto.py`): Scrypt fallback work factor raised from
+  `n=2**15` (32,768) to `n=2**18` (262,144) — 8x increase in GPU brute-force resistance.
+- **Constant-time comparison** (`security.py`): `TimingAttackMitigation.constant_time_compare()`
+  now delegates to `hmac.compare_digest()` (stdlib C implementation) eliminating the
+  `zip()`-based early-termination risk present in the prior custom loop.
+- **OverflowError in side-channel dummy ops fixed** (`crypto.py`): Added `& ((1 << 256) - 1)`
+  bit-mask to the hash accumulator in `SideChannelProtection.dummy_operations()` to keep
+  the integer within 256 bits and prevent `OverflowError` during extended operations.
+- **Error message information disclosure fixed** (`crypto.py`): Decryption failure now
+  raises `ValueError("Authentication failed")` instead of revealing whether the failure
+  was due to a wrong key or data corruption.
+
+### Security (Medium)
+- **Audit HMAC key lazy-loaded** (`audit.py`): `AUDIT_KEY` is no longer a module-level
+  global loaded at import time. A new `_get_audit_key()` function loads it on first use,
+  reducing the window during which the key resides in memory.
+- **Permission failures now logged** (`audit.py`, `security.py`): `chmod()` failures on
+  the audit log and audit key files, and `VirtualLock`/`mlock` failures on secure memory,
+  are now logged as warnings instead of being silently swallowed.
+- **Bare `except` clauses removed** (`security.py`): Replaced bare `except:` in
+  `secure_zero_memory()` and memory-lock helpers with `except (OSError, AttributeError, TypeError)`.
+
+### Security (Low)
+- **Log sanitizer hardened** (`crypto.py`): `_secure_log()` now uses a compiled regex
+  (`re.sub`) to redact all occurrences of `password=`, `key=`, `token=`, etc. in a single
+  pass, fixing the prior bug where only the first matching keyword was redacted.
+- **Passphrase validation strengthened** (`security.py`, `utils.py`): Added maximum length
+  cap (200 characters, DoS prevention) and repeated-character detection (>50% same char)
+  to `InputValidator.validate_passphrase()` in both modules.
+- **Backup restore schema validated** (`backup.py`): `restore_from_backup()` now calls
+  `_validate_backup_schema()` before accessing nested keys, preventing unhandled `KeyError`
+  on malformed or malicious backup files.
+
+### Changed
+- `cryptography` minimum version raised to `>=38.0.0` (aligns with current security support window).
+- `tqdm` removed from core dependencies (was unused at the library level).
+- Author email updated to `ajibijohnson@jtnetsolutions.com`.
+
 ## [0.1.4] - 2025-10-18
 
 ### Changed

@@ -22,25 +22,37 @@ from .pqc import pq_sign, pq_verify, HAS_OQS
 
 logger = logging.getLogger("dual_usb")
 
-AUDIT_LOG_PATH = Path("pqcdualusb_audit.log")
-AUDIT_KEY_PATH = Path(os.environ.get("PQC_DUALUSB_AUDIT_KEY", str(Path.home() / ".pqcdualusb_audit.key")))
+AUDIT_LOG_PATH = Path(os.environ.get("PQC_DUALUSB_AUDIT_LOG", "pqcdualusb_audit.log"))
 
-if AUDIT_KEY_PATH.exists():
-    AUDIT_KEY = AUDIT_KEY_PATH.read_bytes()
-else:
-    AUDIT_KEY = secrets.token_bytes(32)
-    AUDIT_KEY_PATH.write_bytes(AUDIT_KEY)
-    try:
-        AUDIT_KEY_PATH.chmod(0o600)
-    except Exception:
-        pass
+# Audit HMAC key is loaded lazily on first use to minimise the time it
+# spends in memory and to avoid import-time side effects.
+_AUDIT_KEY: Optional[bytes] = None
+
+def _get_audit_key() -> bytes:
+    """Return the HMAC key for audit log chaining, loading it on first call."""
+    global _AUDIT_KEY
+    if _AUDIT_KEY is not None:
+        return _AUDIT_KEY
+
+    key_path = Path(os.environ.get("PQC_DUALUSB_AUDIT_KEY", str(Path.home() / ".pqcdualusb_audit.key")))
+    if key_path.exists():
+        _AUDIT_KEY = key_path.read_bytes()
+    else:
+        _AUDIT_KEY = secrets.token_bytes(32)
+        key_path.write_bytes(_AUDIT_KEY)
+        try:
+            key_path.chmod(0o600)
+        except OSError as e:
+            logger.warning("Could not set restrictive permissions on audit key %s: %s", key_path, e)
+
+    return _AUDIT_KEY
 
 try:
     if not AUDIT_LOG_PATH.exists():
         AUDIT_LOG_PATH.touch(exist_ok=True)
     AUDIT_LOG_PATH.chmod(0o600)
-except Exception:
-    pass
+except OSError as e:
+    logger.warning("Could not set restrictive permissions on audit log %s: %s", AUDIT_LOG_PATH, e)
 
 _AUDIT_CHAIN: Optional[str] = None
 _PQ_AUDIT_SK_PATH: Optional[Path] = None
@@ -65,7 +77,7 @@ def _audit(event: str, details: dict) -> None:
     safe = {k: ("<bytes>" if isinstance(v, (bytes, bytearray)) else v) for k, v in (details or {}).items()}
     base = f"{_now_iso()}|{event}|{json.dumps(safe, separators=(',',':'))}|prev={_AUDIT_CHAIN or ''}"
 
-    mac = hmac.new(AUDIT_KEY, base.encode(), hashlib.sha256).hexdigest()
+    mac = hmac.new(_get_audit_key(), base.encode(), hashlib.sha256).hexdigest()
     chain_input = base + "|hmac=" + mac
     _AUDIT_CHAIN = hashlib.sha3_512(chain_input.encode()).hexdigest()
 

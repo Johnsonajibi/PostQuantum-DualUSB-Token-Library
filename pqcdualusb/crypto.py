@@ -55,6 +55,7 @@ try:
     HAS_ARGON2 = True
 except ImportError:
     HAS_ARGON2 = False
+import re
 import json
 
 # ============================================================================
@@ -71,17 +72,17 @@ if not _logger.handlers:
     # For development, we use NullHandler to suppress output
     _logger.addHandler(logging.NullHandler())
 
+_SENSITIVE_PATTERN = re.compile(
+    r'(password|secret|key|passphrase|token)\s*[=:\s]\s*\S+',
+    re.IGNORECASE,
+)
+
 def _secure_log(level: str, message: str, **kwargs):
     """
     Secure logging that sanitizes sensitive information.
     Only logs to configured handlers, never prints to console.
     """
-    # Sanitize message - remove any potential sensitive data
-    sanitized_msg = message
-    for key in ['key', 'secret', 'password', 'passphrase', 'token']:
-        if key in sanitized_msg.lower():
-            sanitized_msg = sanitized_msg.split(key)[0] + f"[{key} redacted]"
-    
+    sanitized_msg = _SENSITIVE_PATTERN.sub(r'\1=[REDACTED]', message)
     getattr(_logger, level.lower())(sanitized_msg, **kwargs)
 
 # ============================================================================
@@ -228,12 +229,13 @@ class SideChannelProtection:
             count = secrets.randbelow(100) + 50
         
         # Dummy computations that appear like real crypto work
+        _MASK256 = (1 << 256) - 1
         dummy_data = secrets.token_bytes(32)
         for _ in range(count):
-            # Bitwise operations
+            # Bitwise operations — mask keeps result within 256 bits (prevents OverflowError)
             result = int.from_bytes(dummy_data, 'big')
-            result ^= secrets.randbelow(2**256)
-            result = (result << 7) | (result >> 249)
+            result = (result ^ secrets.randbelow(2**256)) & _MASK256
+            result = ((result << 7) | (result >> 249)) & _MASK256
             dummy_data = result.to_bytes(32, 'big')
     
     @staticmethod
@@ -360,41 +362,81 @@ _SCRYPT_WARNED = False
 def _derive_key(passphrase: str, salt: bytes) -> tuple[bytes, dict]:
     """Derive encryption key using Argon2id or scrypt with secure memory handling."""
     global _SCRYPT_WARNED
-    # Use secure memory for sensitive operations
     passphrase_bytes = passphrase.encode('utf-8')
-    
+
     try:
         with SecureMemory(len(passphrase_bytes) + SecurityConfig.AES_KEY_SIZE) as secure_buf:
-            # Copy passphrase to secure memory
             secure_buf[:len(passphrase_bytes)] = passphrase_bytes
-            
+
             if HAS_ARGON2:
                 params = SecurityConfig.get_argon2_params()
                 try:
-                    # Use secure memory buffer for key derivation
                     key = hash_secret_raw(
-                        bytes(secure_buf[:len(passphrase_bytes)]), 
-                        salt, 
-                        time_cost=params["time_cost"], 
-                        memory_cost=params["memory_cost"], 
-                        parallelism=params["parallelism"], 
-                        hash_len=SecurityConfig.AES_KEY_SIZE, 
+                        bytes(secure_buf[:len(passphrase_bytes)]),
+                        salt,
+                        time_cost=params["time_cost"],
+                        memory_cost=params["memory_cost"],
+                        parallelism=params["parallelism"],
+                        hash_len=SecurityConfig.AES_KEY_SIZE,
                         type=Argon2Type.ID
                     )
                     return key, {"kdf": "argon2id", **params}
-                except Exception as e:  # rare
+                except Exception as e:
                     _logger.warning("Argon2 failed: %s; falling back to scrypt.", e)
             else:
                 if not _SCRYPT_WARNED:
                     _logger.warning("Argon2 not available; falling back to scrypt (install argon2-cffi).")
                     _SCRYPT_WARNED = True
-            
-            # Fallback to scrypt
-            kdf = Scrypt(salt=salt, length=SecurityConfig.AES_KEY_SIZE, n=2**15, r=8, p=1)
+
+            kdf = Scrypt(salt=salt, length=SecurityConfig.AES_KEY_SIZE, n=2**18, r=8, p=1)
             key = kdf.derive(bytes(secure_buf[:len(passphrase_bytes)]))
-            return key, {"kdf": "scrypt", "n": 2**15, "r": 8, "p": 1}
+            return key, {"kdf": "scrypt", "n": 2**18, "r": 8, "p": 1}
     finally:
-        # Clear passphrase from memory
+        if 'passphrase_bytes' in locals():
+            secure_zero_memory(bytearray(passphrase_bytes))
+
+
+def _derive_key_with_stored_params(passphrase: str, salt: bytes, kdf_params: dict) -> bytes:
+    """
+    Re-derive a key using the KDF parameters that were stored alongside a backup.
+
+    This must be used for restore/verify operations so that backups created with
+    different KDF parameters (e.g. an older scrypt n value, or Argon2 vs scrypt)
+    can still be decrypted correctly.
+
+    Args:
+        passphrase: The user passphrase.
+        salt: The salt bytes read from the backup.
+        kdf_params: The 'kdf' dict stored in the backup JSON, e.g.
+                    {"kdf": "scrypt", "n": 32768, "r": 8, "p": 1}  or
+                    {"kdf": "argon2id", "time_cost": 4, ...}
+    """
+    passphrase_bytes = passphrase.encode('utf-8')
+    kdf_name = kdf_params.get("kdf", "scrypt")
+
+    try:
+        with SecureMemory(len(passphrase_bytes) + SecurityConfig.AES_KEY_SIZE) as secure_buf:
+            secure_buf[:len(passphrase_bytes)] = passphrase_bytes
+
+            if kdf_name == "argon2id" and HAS_ARGON2:
+                key = hash_secret_raw(
+                    bytes(secure_buf[:len(passphrase_bytes)]),
+                    salt,
+                    time_cost=kdf_params.get("time_cost", SecurityConfig.ARGON2_TIME_COST),
+                    memory_cost=kdf_params.get("memory_cost", SecurityConfig.ARGON2_MEMORY_COST),
+                    parallelism=kdf_params.get("parallelism", SecurityConfig.ARGON2_PARALLELISM),
+                    hash_len=SecurityConfig.AES_KEY_SIZE,
+                    type=Argon2Type.ID
+                )
+                return key
+            else:
+                # scrypt (or argon2 requested but library unavailable — fall back)
+                n = int(kdf_params.get("n", 2**18))
+                r = int(kdf_params.get("r", 8))
+                p = int(kdf_params.get("p", 1))
+                kdf = Scrypt(salt=salt, length=SecurityConfig.AES_KEY_SIZE, n=n, r=r, p=p)
+                return kdf.derive(bytes(secure_buf[:len(passphrase_bytes)]))
+    finally:
         if 'passphrase_bytes' in locals():
             secure_zero_memory(bytearray(passphrase_bytes))
 
@@ -887,13 +929,12 @@ class HybridCrypto:
         
         # Hybrid mode: combine both entropy sources
         classical_key = self._derive_classical_key(passphrase, salt)
-        
-        # Mix with PQC shared secret
-        combined_input = classical_key + pq_shared_secret + b"PQC_HYBRID_V1"
-        
-        # Final mixing
-        combined = classical_key + pq_shared_secret[:32] if len(pq_shared_secret) >= 32 else pq_shared_secret.ljust(32, b'\x00')
-        return hashlib.sha256(combined).digest()
+
+        # Mix classical key + PQC shared secret with a domain separator.
+        # Use the full combined_input so the domain tag is included in the hash.
+        pq_padded = pq_shared_secret[:32] if len(pq_shared_secret) >= 32 else pq_shared_secret.ljust(32, b'\x00')
+        combined_input = classical_key + pq_padded + b"PQC_HYBRID_V1"
+        return hashlib.sha256(combined_input).digest()
     
     def _derive_classical_key(self, passphrase: str, salt: bytes) -> bytes:
         """
@@ -1077,11 +1118,11 @@ class HybridCrypto:
         try:
             return aes_gcm.decrypt(nonce, ciphertext, None)
         except InvalidTag:
-            raise ValueError("Decryption failed - invalid key or corrupted data")
+            raise ValueError("Authentication failed")
 
 
 def _encrypt_backup(plaintext: bytes, passphrase: str, meta: dict) -> bytes:
-    salt = os.urandom(16)
+    salt = os.urandom(SecurityConfig.SALT_SIZE)  # 32 bytes, consistent with SecurityConfig
     key, kdf_params = _derive_key(passphrase, salt)
     aes = AESGCM(key)
     nonce = os.urandom(12)
@@ -1099,10 +1140,13 @@ def verify_backup(backup_file: Path, passphrase: str, token: bytes) -> bool:
         data = json.loads(backup_file.read_text("utf-8"))
         meta = data["meta"]
         aead = data["aead"]
-        salt = bytes.fromhex(data["kdf"]["salt"])
-        
-        key, _ = _derive_key(passphrase, salt)
-        
+        kdf_params = data["kdf"]
+        salt = bytes.fromhex(kdf_params["salt"])
+
+        # Use stored KDF params so backups created with different work-factor
+        # settings (e.g. the old n=2**15 scrypt) can still be verified.
+        key = _derive_key_with_stored_params(passphrase, salt, kdf_params)
+
         pt = AESGCM(key).decrypt(
             bytes.fromhex(aead["nonce"]), 
             bytes.fromhex(aead["ct"]), 

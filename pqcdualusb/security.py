@@ -16,12 +16,16 @@ timing attack prevention, and security parameter configuration.
 import os
 import sys
 import time
+import hmac
 import secrets
+import logging
 import platform
 import ctypes
 import mmap
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Optional
 from pathlib import Path
+
+logger = logging.getLogger("dual_usb")
 
 
 class SecureMemory:
@@ -59,36 +63,30 @@ class SecureMemory:
     def _lock_memory_windows(self):
         """Lock memory on Windows using VirtualLock."""
         try:
-            import ctypes
             from ctypes import wintypes
-            
             kernel32 = ctypes.windll.kernel32
             addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
-            
             if kernel32.VirtualLock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data))):
                 self.locked = True
-        except Exception:
-            # Memory locking failed, continue without it
-            pass
-    
+            else:
+                logger.warning("VirtualLock failed (err=%d); memory may be swapped", kernel32.GetLastError())
+        except (OSError, AttributeError, TypeError) as e:
+            logger.warning("Memory locking unavailable on Windows: %s", e)
+
     def _lock_memory_posix(self):
         """Lock memory on POSIX systems using mlock."""
         try:
-            # Get libc handle
-            if platform.system() == "Darwin":  # macOS
+            if platform.system() == "Darwin":
                 libc = ctypes.CDLL("libc.dylib")
-            else:  # Linux and other POSIX
+            else:
                 libc = ctypes.CDLL("libc.so.6")
-            
-            # Get memory address
             addr = ctypes.addressof((ctypes.c_char * len(self.data)).from_buffer(self.data))
-            
-            # Call mlock system call
-            if libc.mlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data))) == 0:
+            if libc.mlock(ctypes.c_void_p(addr), ctypes.c_size_t(len(self.data))) != 0:
+                logger.warning("mlock failed; memory may be swapped to disk")
+            else:
                 self.locked = True
-        except Exception:
-            # Memory locking failed, continue without it
-            pass
+        except (OSError, AttributeError, TypeError) as e:
+            logger.warning("Memory locking unavailable on POSIX: %s", e)
     
     def _cleanup(self):
         """Securely zero and unlock memory."""
@@ -133,34 +131,21 @@ class TimingAttackMitigation:
     def constant_time_compare(a: bytes, b: bytes) -> bool:
         """
         Constant-time comparison to prevent timing attacks.
-        
-        Uses bitwise operations to ensure comparison time is independent
-        of where differences occur in the byte sequences.
-        
+
+        Uses hmac.compare_digest (stdlib) as the primary method, which is
+        implemented in C and guaranteed constant-time. Falls back to a
+        full-array XOR loop that unconditionally iterates all bytes so
+        that neither early-termination nor zip truncation can leak length
+        information through timing.
+
         Args:
             a: First byte sequence
             b: Second byte sequence
-        
+
         Returns:
             True if sequences are equal, False otherwise
         """
-        # Length check must also be constant-time
-        length_match = len(a) == len(b)
-        
-        # Pad to same length for constant-time comparison
-        if not length_match:
-            # Pad shorter sequence to avoid early termination
-            max_len = max(len(a), len(b))
-            a = a.ljust(max_len, b'\x00')
-            b = b.ljust(max_len, b'\x00')
-        
-        # XOR all bytes - result is 0 only if all bytes match
-        result = 0
-        for x, y in zip(a, b):
-            result |= x ^ y
-        
-        # Return True only if both length matched AND all bytes matched
-        return length_match and (result == 0)
+        return hmac.compare_digest(a, b)
     
     @staticmethod
     def constant_time_select(condition: bool, true_value: int, false_value: int) -> int:
@@ -388,63 +373,118 @@ class SecurityConfig:
 
 class InputValidator:
     """Input validation utilities."""
-    
+
+    # Paths under these prefixes are never allowed as user-supplied targets
+    _BLOCKED_SYSTEM_PREFIXES = (
+        "/etc/", "/bin/", "/sbin/", "/usr/", "/boot/", "/proc/", "/sys/",
+        "C:\\Windows\\", "C:\\System32\\", "C:\\Program Files\\",
+    )
+
     @staticmethod
-    def validate_path(path: Union[str, Path], must_exist: bool = True, must_be_dir: bool = False) -> Path:
+    def validate_path(
+        path: Union[str, Path],
+        must_exist: bool = True,
+        must_be_dir: bool = False,
+        allowed_base: Optional[Path] = None,
+    ) -> Path:
         """
         Validate and normalize a file system path.
-        
+
+        Blocks path traversal, URI schemes, UNC paths, and system directories.
+
         Args:
             path: Path to validate
             must_exist: Whether the path must exist
             must_be_dir: Whether the path must be a directory
-            
+            allowed_base: If given, the resolved path must be under this directory
+
         Returns:
             Validated Path object
-            
+
         Raises:
             ValueError: If validation fails
         """
         if not path:
             raise ValueError("Path cannot be empty")
-        
-        path_obj = Path(path).resolve()
-        
+
+        path_str = str(path)
+
+        # Reject URI schemes (e.g. file://, http://)
+        if "://" in path_str or path_str.lower().startswith("file:"):
+            raise ValueError("URI schemes are not allowed in paths")
+
+        # Reject UNC / network paths
+        if path_str.startswith("\\\\") or path_str.startswith("//"):
+            raise ValueError("UNC/network paths are not allowed")
+
+        # Reject explicit traversal sequences
+        import re as _re
+        if _re.search(r'\.\.[\\/]|[\\/]\.\.', path_str):
+            raise ValueError("Path traversal sequences ('..') are not allowed")
+
+        try:
+            path_obj = Path(path_str).resolve()
+        except (OSError, ValueError, TypeError) as e:
+            raise ValueError(f"Invalid path: {e}") from e
+
+        # Reject system directory prefixes
+        path_obj_str = str(path_obj)
+        for prefix in InputValidator._BLOCKED_SYSTEM_PREFIXES:
+            if path_obj_str.startswith(prefix):
+                raise ValueError(f"Access to system directory is not allowed: {path_obj}")
+
+        # Enforce base-directory confinement
+        if allowed_base is not None:
+            try:
+                path_obj.relative_to(allowed_base.resolve())
+            except ValueError:
+                raise ValueError(f"Path escapes allowed base directory: {path_obj}")
+
         if must_exist and not path_obj.exists():
             raise ValueError(f"Path does not exist: {path_obj}")
-        
+
         if must_be_dir and path_obj.exists() and not path_obj.is_dir():
             raise ValueError(f"Path is not a directory: {path_obj}")
-        
+
         return path_obj
-    
+
     @staticmethod
     def validate_passphrase(passphrase: str, min_length: int = None) -> str:
         """
         Validate passphrase strength.
-        
+
         Args:
             passphrase: Passphrase to validate
             min_length: Minimum required length
-            
+
         Returns:
             Validated passphrase
-            
+
         Raises:
             ValueError: If validation fails
         """
         if not passphrase:
             raise ValueError("Passphrase cannot be empty")
-        
+
+        # Cap length to prevent DoS via hash computation on huge inputs
+        if len(passphrase) > 200:
+            raise ValueError("Passphrase exceeds maximum allowed length of 200 characters")
+
         min_len = min_length or SecurityConfig.MINIMUM_PASSPHRASE_LENGTH
-        
+
         if len(passphrase) < min_len:
             raise ValueError(f"Passphrase must be at least {min_len} characters")
-        
-        # Check for common weak patterns
-        if passphrase.lower() in ['password', '123456', 'qwerty', 'admin']:
+
+        # Reject common weak values
+        if passphrase.lower() in {'password', '123456', 'qwerty', 'admin', 'letmein', 'welcome'}:
             raise ValueError("Passphrase is too common - use a stronger passphrase")
-        
+
+        # Reject passphrases where more than 50% of characters are the same
+        if passphrase:
+            most_common_count = max(passphrase.lower().count(c) for c in set(passphrase.lower()))
+            if most_common_count / len(passphrase) > 0.5:
+                raise ValueError("Passphrase has too many repeated characters - use a stronger passphrase")
+
         return passphrase
     
     @staticmethod
@@ -492,19 +532,17 @@ def secure_zero_memory(data: Union[bytearray, bytes]) -> None:
         
         # Additional security: try to prevent optimization
         try:
-            # Force memory barrier on supported platforms
             if platform.system() == "Windows":
                 ctypes.windll.kernel32.MemoryBarrier()
             else:
-                # On POSIX, try to use memory barrier if available
                 try:
                     import ctypes.util
                     libc = ctypes.CDLL(ctypes.util.find_library("c"))
                     if hasattr(libc, '__sync_synchronize'):
                         libc.__sync_synchronize()
-                except:
+                except (OSError, AttributeError, TypeError):
                     pass
-        except:
+        except (OSError, AttributeError, TypeError):
             pass
     
     elif isinstance(data, bytes):

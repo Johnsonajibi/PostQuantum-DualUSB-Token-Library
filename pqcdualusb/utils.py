@@ -415,62 +415,107 @@ class FileOperations:
 
 class InputValidator:
     """Enhanced input validation utilities."""
-    
+
+    _BLOCKED_SYSTEM_PREFIXES = (
+        "/etc/", "/bin/", "/sbin/", "/usr/", "/boot/", "/proc/", "/sys/",
+        "C:\\Windows\\", "C:\\System32\\", "C:\\Program Files\\",
+    )
+
     @staticmethod
-    def validate_path(path: Union[str, Path], must_exist: bool = True, must_be_dir: bool = False) -> Path:
+    def validate_path(
+        path: Union[str, Path],
+        must_exist: bool = True,
+        must_be_dir: bool = False,
+        allowed_base: Optional[Path] = None,
+    ) -> Path:
         """
         Validate and normalize a file system path.
-        
+
+        Blocks path traversal, URI schemes, UNC paths, and system directories.
+
         Args:
             path: Path to validate
             must_exist: Whether the path must exist
             must_be_dir: Whether the path must be a directory
-            
+            allowed_base: If given, the resolved path must be under this directory
+
         Returns:
             Validated Path object
-            
+
         Raises:
             ValueError: If validation fails
         """
         if not path:
             raise ValueError("Path cannot be empty")
-        
-        path_obj = Path(path).resolve()
-        
+
+        path_str = str(path)
+
+        if "://" in path_str or path_str.lower().startswith("file:"):
+            raise ValueError("URI schemes are not allowed in paths")
+
+        if path_str.startswith("\\\\") or path_str.startswith("//"):
+            raise ValueError("UNC/network paths are not allowed")
+
+        import re as _re
+        if _re.search(r'\.\.[\\/]|[\\/]\.\.', path_str):
+            raise ValueError("Path traversal sequences ('..') are not allowed")
+
+        try:
+            path_obj = Path(path_str).resolve()
+        except (OSError, ValueError, TypeError) as e:
+            raise ValueError(f"Invalid path: {e}") from e
+
+        path_obj_str = str(path_obj)
+        for prefix in InputValidator._BLOCKED_SYSTEM_PREFIXES:
+            if path_obj_str.startswith(prefix):
+                raise ValueError(f"Access to system directory is not allowed: {path_obj}")
+
+        if allowed_base is not None:
+            try:
+                path_obj.relative_to(allowed_base.resolve())
+            except ValueError:
+                raise ValueError(f"Path escapes allowed base directory: {path_obj}")
+
         if must_exist and not path_obj.exists():
             raise ValueError(f"Path does not exist: {path_obj}")
-        
+
         if must_be_dir and path_obj.exists() and not path_obj.is_dir():
             raise ValueError(f"Path is not a directory: {path_obj}")
-        
+
         return path_obj
-    
+
     @staticmethod
     def validate_passphrase(passphrase: str, min_length: int = 12) -> str:
         """
         Validate passphrase strength.
-        
+
         Args:
             passphrase: Passphrase to validate
             min_length: Minimum required length
-            
+
         Returns:
             Validated passphrase
-            
+
         Raises:
             ValueError: If validation fails
         """
         if not passphrase:
             raise ValueError("Passphrase cannot be empty")
-        
+
+        if len(passphrase) > 200:
+            raise ValueError("Passphrase exceeds maximum allowed length of 200 characters")
+
         if len(passphrase) < min_length:
             raise ValueError(f"Passphrase must be at least {min_length} characters")
-        
-        # Check for common weak patterns
-        weak_patterns = ['password', '123456', 'qwerty', 'admin', 'letmein']
+
+        weak_patterns = {'password', '123456', 'qwerty', 'admin', 'letmein', 'welcome'}
         if passphrase.lower() in weak_patterns:
             raise ValueError("Passphrase is too common - use a stronger passphrase")
-        
+
+        most_common_count = max(passphrase.lower().count(c) for c in set(passphrase.lower()))
+        if most_common_count / len(passphrase) > 0.5:
+            raise ValueError("Passphrase has too many repeated characters - use a stronger passphrase")
+
         return passphrase
     
     @staticmethod

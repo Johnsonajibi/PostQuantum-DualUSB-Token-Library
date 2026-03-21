@@ -9,15 +9,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pqcdualusb"
-version = "0.1.4"
+version = "0.1.5"
 description = "Post-Quantum Cryptography Dual USB Token Library for secure backup operations"
 readme = "PYPI_README.md"
 license = "MIT"
 authors = [
-    { name = "Johnson Ajibi", email = "Johnsonajibi@gmail.com" }
+    { name = "Johnson Ajibi", email = "ajibijohnson@jtnetsolutions.com" }
 ]
 maintainers = [
-    { name = "Johnson Ajibi", email = "Johnsonajibi@gmail.com" }
+    { name = "Johnson Ajibi", email = "ajibijohnson@jtnetsolutions.com" }
 ]
 requires-python = ">=3.8"
 keywords = ["cryptography", "post-quantum", "usb", "backup", "security", "token"]
@@ -37,9 +37,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "cryptography>=3.4.8",
+    "cryptography>=38.0.0",
     "psutil>=5.9.0",
-    "tqdm>=4.62.0",
     "argon2-cffi>=21.3.0",
 ]
 
@@ -68,6 +67,7 @@ Documentation = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Libra
 Repository = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library.git"
 "Bug Tracker" = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/issues"
 Changelog = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/blob/master/CHANGELOG.md"
+"Known Issues" = "https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library/blob/master/README.md#known-issues"
 
 [tool.setuptools]
 package-dir = {"" = "."}
