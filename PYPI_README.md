@@ -7,7 +7,17 @@
 
 A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 
-> **NOTE:** This is a library package** designed to be imported into your applications. It provides a set of functions to manage secure backups. For the full documentation with interactive diagrams, architecture details, and contribution guidelines, please visit the [GitHub Repository](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library).
+> **SECURITY NOTICE — v0.1.5:** This release patches multiple vulnerabilities found during a full
+> code audit. Users on v0.1.4 or earlier should upgrade immediately:
+> `pip install --upgrade pqcdualusb`
+>
+> Fixes: path traversal in `validate_path()`, weakened scrypt KDF (`n=2**15`), timing leak in
+> constant-time comparison, OverflowError in side-channel dummy ops, error-message information
+> disclosure, backup restore using wrong KDF parameters, and dead hybrid key domain separator.
+
+> **NOTE:** This is a library package designed to be imported into your applications. For full
+> documentation, diagrams, and architecture details visit the
+> [GitHub Repository](https://github.com/Johnsonajibi/PostQuantum-DualUSB-Token-Library).
 
 ---
 
