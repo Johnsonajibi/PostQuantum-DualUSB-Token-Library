@@ -2,7 +2,6 @@ include README.md
 include LICENSE
 include CHANGELOG.md
 include SECURITY.md
-include ROADMAP.md
 include pyproject.toml
 recursive-include pqcdualusb *.py
 recursive-include tests *.py

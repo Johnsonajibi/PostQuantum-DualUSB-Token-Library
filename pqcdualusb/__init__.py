@@ -29,7 +29,7 @@ Usage:
     # Use logging for status messages instead of print()
 """
 
-__version__ = "0.15.5"
+__version__ = "0.1.5"
 __author__ = "Johnson Ajibi"
 __license__ = "MIT"
 
