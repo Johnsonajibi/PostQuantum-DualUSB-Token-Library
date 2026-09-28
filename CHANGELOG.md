@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.6] - 2026-09-27
+
+### Note
+- This is the same content previously prepared as `0.1.5` below, republished under
+  the `0.15.x` line. PyPI already had `0.15.5` published (predating this fix), and
+  PyPI version comparison is numeric: `0.1.5 < 0.15.5`, so a release actually named
+  `0.1.5` would never resolve as the latest version for anyone installing with
+  `pqcdualusb` or `pqcdualusb>=...`. Renumbering to `0.15.6` is required for this
+  fix to actually reach users; the `0.1.5` entry below is kept for history but was
+  never published to PyPI under that name.
+
 ## [0.1.5] - 2026-03-21
 
 ### Security (Critical)

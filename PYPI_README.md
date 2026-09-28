@@ -7,8 +7,8 @@
 
 A comprehensive **Python library** for post-quantum cryptographic dual USB backup operations with advanced hardware security features and side-channel attack countermeasures.
 
-> **SECURITY NOTICE — v0.1.5:** This release patches multiple vulnerabilities found during a full
-> code audit. Users on v0.1.4 or earlier should upgrade immediately:
+> **SECURITY NOTICE — v0.15.6:** This release patches multiple vulnerabilities found during a full
+> code audit. Users on v0.15.5 or earlier should upgrade immediately:
 > `pip install --upgrade pqcdualusb`
 >
 > Fixes: path traversal in `validate_path()`, weakened scrypt KDF (`n=2**15`), timing leak in
