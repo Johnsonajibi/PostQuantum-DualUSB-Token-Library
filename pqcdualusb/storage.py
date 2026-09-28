@@ -14,7 +14,7 @@ import hmac
 from pathlib import Path
 from typing import Dict
 
-from .audit import _audit, AUDIT_KEY
+from .audit import _audit, _get_audit_key
 from .device import _device_id_for_path
 
 STATE_FILE = ".dual_usb_state.json"
@@ -53,7 +53,7 @@ def _state_mac(obj: dict) -> str:
         "device": (obj or {}).get("device", {}),
     }
     data = json.dumps(payload, separators=(",", ":")).encode()
-    return hmac.new(AUDIT_KEY, data, hashlib.sha256).hexdigest()
+    return hmac.new(_get_audit_key(), data, hashlib.sha256).hexdigest()
 
 def _state_load(primary_root: Path) -> dict:
     p = _state_path(primary_root)

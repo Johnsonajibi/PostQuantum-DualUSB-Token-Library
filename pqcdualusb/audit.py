@@ -141,7 +141,7 @@ def verify_audit_log(pq_pk_path: Optional[Path] = None) -> bool:
             if prev_chain and ("prev=" + prev_chain) not in parts:
                 logger.error("Audit chain mismatch")
                 return False
-            expect_mac = hmac.new(AUDIT_KEY, base.encode(), hashlib.sha256).hexdigest()
+            expect_mac = hmac.new(_get_audit_key(), base.encode(), hashlib.sha256).hexdigest()
             got_mac = hmac_field.split("=", 1)[1]
             if got_mac != expect_mac:
                 logger.error("Audit HMAC mismatch")
@@ -160,8 +160,8 @@ def verify_audit_log(pq_pk_path: Optional[Path] = None) -> bool:
 import atexit
 def _cleanup_sensitive_data():
     """Cleanup function called on program exit."""
-    global AUDIT_KEY
-    if AUDIT_KEY:
-        secure_zero_memory(bytearray(AUDIT_KEY))
+    global _AUDIT_KEY
+    if _AUDIT_KEY:
+        secure_zero_memory(bytearray(_AUDIT_KEY))
 
 atexit.register(_cleanup_sensitive_data)
